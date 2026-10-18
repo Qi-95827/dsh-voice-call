@@ -32,10 +32,10 @@
 
 下面三种方式装的是同一个组合包；插件管理页那条不需要命令行。
 
-1. **插件管理页（推荐）。** 侧栏 → **插件** → **添加插件** → **安装第三方插件**，粘贴 Git 地址（`https://github.com/<you>/dsh-voice-call`）或本地绝对路径。
+1. **插件管理页（推荐）。** 侧栏 → **插件** → **添加插件** → **安装第三方插件**，粘贴 Git 地址（`https://github.com/Qi-95827/dsh-voice-call`）或本地绝对路径。
 2. **命令行，从 Git 安装：**
    ```sh
-   dsh plugin --profile <profile> add github:<you>/dsh-voice-call
+   dsh plugin --profile <profile> add github:Qi-95827/dsh-voice-call
    ```
 3. **命令行，从本地目录安装：** 填包含本 `README.md` 的绝对路径。这种是 link 安装，目录要保留。
    ```sh
@@ -52,12 +52,12 @@
 帮我安装一个 DeepSeek Harness 插件（bundle），装进当前这个 profile，装完确认能用。
 
 插件：dsh-voice-call
-来源：https://github.com/<owner>/dsh-voice-call
+来源：https://github.com/Qi-95827/dsh-voice-call
 
 请按这个顺序做：
 1. 优先用你的插件管理能力安装：plugin_manager 的 install_bundle，目标就是上面这个地址。
    如果这个工具在当前 profile 不可用，就在 shell 里执行：
-   dsh plugin --profile <当前 profile> add https://github.com/<owner>/dsh-voice-call
+   dsh plugin --profile <当前 profile> add https://github.com/Qi-95827/dsh-voice-call
    profile 名可以从环境变量 DSH_PROFILE（PowerShell 里是 $env:DSH_PROFILE）读到。
 2. 不要手改 profile 的 package.json 或 cordis.patch.yml，让安装流程自己写。
 3. 安装过程中如果需要批准构建脚本或需要重启，直接告诉我。
@@ -70,7 +70,7 @@
 装好之后，如果需要，再带我走一遍准备：填阿里云 DashScope API Key、选音色。
 ```
 
-把 `<owner>` 换成实际的 GitHub 用户名或组织名。
+上面这段已经指向本仓库（`Qi-95827/dsh-voice-call`）。如果你 fork 了，把块里两处 URL 一起改掉。
 
 ## 配置
 

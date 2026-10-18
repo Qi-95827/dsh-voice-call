@@ -3,6 +3,14 @@
   "version": "1.2.2",
   "description": "Talk to the current session: speech in, speech out, transcript in the conversation.",
   "icon": "icon.svg",
+  "homepage": "https://github.com/Qi-95827/dsh-voice-call#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Qi-95827/dsh-voice-call.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Qi-95827/dsh-voice-call/issues"
+  },
   "type": "module",
   "main": "index.js",
   "exports": {

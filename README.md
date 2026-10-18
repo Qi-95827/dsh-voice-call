@@ -55,10 +55,10 @@ Any of these installs the same bundle; the Plugin Manager path needs no shell.
 
 1. **Plugin Manager (recommended).** Sidebar → **Plugins** → **Add plugin** →
    **Install third-party plugin**, then paste a Git address
-   (`https://github.com/<you>/dsh-voice-call`) or a local absolute path.
+   (`https://github.com/Qi-95827/dsh-voice-call`) or a local absolute path.
 2. **CLI, from Git:**
    ```sh
-   dsh plugin --profile <profile> add github:<you>/dsh-voice-call
+   dsh plugin --profile <profile> add github:Qi-95827/dsh-voice-call
    ```
 3. **CLI, from a local checkout:** the absolute directory containing this
    `README.md`. The package is linked, so keep the directory in place.
@@ -79,13 +79,13 @@ install:
 Install a DeepSeek Harness plugin (a bundle) into the current profile and confirm it works.
 
 Plugin: dsh-voice-call
-Source: https://github.com/<owner>/dsh-voice-call
+Source: https://github.com/Qi-95827/dsh-voice-call
 
 Do it in this order:
 1. Prefer your plugin-management capability: plugin_manager with action install_bundle,
    targeting the address above.
    If that tool is not available in this profile, run in the shell:
-   dsh plugin --profile <current profile> add https://github.com/<owner>/dsh-voice-call
+   dsh plugin --profile <current profile> add https://github.com/Qi-95827/dsh-voice-call
    The profile name is in DSH_PROFILE ($env:DSH_PROFILE in PowerShell).
 2. Do not hand-edit the profile's package.json or cordis.patch.yml; let the installer write them.
 3. Tell me when something needs approval or a restart.
@@ -100,7 +100,8 @@ Do it in this order:
 Afterwards, walk me through setup if needed: the Alibaba Cloud DashScope API key and a voice.
 ```
 
-Replace `<owner>` with the actual GitHub user or organisation.
+The block above already points at this repository (`Qi-95827/dsh-voice-call`).
+If you fork it, change both URLs inside the block.
 
 ## Configure
 
