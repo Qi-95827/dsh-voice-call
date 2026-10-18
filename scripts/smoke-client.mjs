@@ -153,10 +153,18 @@ if (retained) throw new Error('opening the panel must not start a call yet');
 
 const prep = render(component());
 if (!JSON.stringify(prep).includes('开始通话')) throw new Error('pre-call panel did not render');
-if (!JSON.stringify(prep).includes('按钮颜色')) throw new Error('pre-call panel has no colour picker');
+if (JSON.stringify(prep).includes('按钮颜色')) throw new Error('settings should start collapsed');
+
+// The config block lives behind one button.
+const settingsButton = findButton(prep, '配置');
+if (!settingsButton) throw new Error('settings button missing');
+settingsButton.props.onClick();
+const prepOpen = render(component());
+if (!JSON.stringify(prepOpen).includes('按钮颜色')) throw new Error('settings did not open');
+if (!JSON.stringify(prepOpen).includes('收起配置')) throw new Error('settings button did not switch label');
 
 // Voice barge-in exists, defaults to off, and can be turned on.
-const bargeToggle = findToggle(prep, '语音打断');
+const bargeToggle = findToggle(prepOpen, '语音打断');
 if (!bargeToggle) throw new Error('barge-in toggle missing');
 if (bargeToggle.props.checked !== false) throw new Error('barge-in must default to off');
 bargeToggle.props.onChange({ target: { checked: true } });
@@ -164,12 +172,13 @@ const prepBargeOn = render(component());
 if (findToggle(prepBargeOn, '语音打断')?.props.checked !== true) throw new Error('barge-in toggle did not stick');
 
 // Language switcher: English copy replaces the Chinese one, and the layout stays.
-const englishButton = findButton(prep, 'English');
+const englishButton = findButton(prepBargeOn, 'English');
 if (!englishButton) throw new Error('language switcher missing');
 englishButton.props.onClick();
 const prepEn = render(component());
 if (!JSON.stringify(prepEn).includes('Start call')) throw new Error('English copy not applied');
 if (JSON.stringify(prepEn).includes('开始通话')) throw new Error('Chinese copy still present after switching');
+if (!JSON.stringify(prepEn).includes('Hide settings')) throw new Error('settings label did not follow the language');
 
 const startButton = findButton(prepEn, 'Start call');
 if (!startButton) throw new Error('start-call button missing');

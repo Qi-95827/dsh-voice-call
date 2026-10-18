@@ -84,6 +84,8 @@ window.__ModuleLoader__.load({
         'rate': '语速',
         'clean': '朗读清洗（跳过表格/代码）',
         'bargeIn': '语音打断（我说话就停止朗读）',
+        'settings': '配置',
+        'settings.hide': '收起配置',
         'color': '按钮颜色',
         'color.custom': '自定义颜色',
         'key.configured': '已配置 {mask}',
@@ -143,6 +145,8 @@ window.__ModuleLoader__.load({
         'rate': 'Rate',
         'clean': 'Skip code and tables when reading',
         'bargeIn': 'Stop reading when I speak',
+        'settings': 'Settings',
+        'settings.hide': 'Hide settings',
         'color': 'Button colour',
         'color.custom': 'Custom colour',
         'key.configured': 'Key set: {mask}',
@@ -243,6 +247,7 @@ window.__ModuleLoader__.load({
       voice: 'Cherry',
       rate: 1,
       configured: false,
+      configReady: false,
       keyMasked: '',
       voices: [],
       usage: null,
@@ -834,6 +839,7 @@ window.__ModuleLoader__.load({
         rate = Number(data.rate) || rate;
         set({
           configured: Boolean(data.configured),
+          configReady: true,
           keyMasked: data.keyMasked || '',
           voice: data.voice || call.voice,
           rate,
@@ -841,7 +847,7 @@ window.__ModuleLoader__.load({
           usage: data.usage || null,
         });
       } catch (err) {
-        set({ error: t('error.config', { message: err?.message || err }) });
+        set({ error: t('error.config', { message: err?.message || err }), configReady: true });
       }
     }
 
@@ -1447,6 +1453,171 @@ window.__ModuleLoader__.load({
       return t('phase.' + (phase || 'idle'));
     }
 
+    /* ------------------------------------------------------------------ *
+     * Settings block
+     * ------------------------------------------------------------------ */
+
+    function settingsOpen(state) {
+      // A missing key always shows the form, so a first run cannot hide it.
+      // Wait for the config read so a configured profile does not flash open.
+      return Boolean(state.settingsOpen) || (state.configReady && !state.configured);
+    }
+
+    function toggleSettings() {
+      set({ settingsOpen: !call.settingsOpen });
+    }
+
+    function voiceRow(state) {
+      if (!state.voices.length) return null;
+      return h(
+        'div',
+        { style: S.row },
+        h('span', { style: { ...S.label, flex: '0 0 auto' } }, t('voice')),
+        h(
+          'select',
+          {
+            value: state.voice,
+            onChange: (event) => setVoice(event.target.value),
+            style: { ...S.input, flex: 1 },
+          },
+          state.voices.map((voice) =>
+            h(
+              'option',
+              { key: voice.id, value: voice.id },
+              state.lang === 'en'
+                ? voice.descEn
+                  ? `${voice.id} — ${voice.descEn}`
+                  : voice.id
+                : `${voice.label}（${voice.desc}）`,
+            ),
+          ),
+        ),
+      );
+    }
+
+    function rateRow(state, accent) {
+      return h(
+        'label',
+        { style: S.label },
+        t('rate'),
+        h('input', {
+          type: 'range',
+          min: 0.7,
+          max: 1.5,
+          step: 0.05,
+          value: state.rate,
+          onChange: (event) => setRate(Number(event.target.value)),
+          style: { flex: 1, accentColor: accent },
+        }),
+        h('span', { style: { width: 36, textAlign: 'right' } }, Number(state.rate).toFixed(2) + '×'),
+      );
+    }
+
+    function cleanRow(state, accent) {
+      return h(
+        'label',
+        { style: { ...S.label, justifyContent: 'space-between', cursor: 'pointer' } },
+        h('span', null, t('clean')),
+        h('input', {
+          type: 'checkbox',
+          checked: state.cleanSpeech !== false,
+          onChange: (event) => setCleanSpeech(event.target.checked),
+          style: { accentColor: accent },
+        }),
+      );
+    }
+
+    function bargeRow(state, accent) {
+      return h(
+        'label',
+        { style: { ...S.label, justifyContent: 'space-between', cursor: 'pointer' } },
+        h('span', null, t('bargeIn')),
+        h('input', {
+          type: 'checkbox',
+          checked: Boolean(state.bargeIn),
+          onChange: (event) => setBargeIn(event.target.checked),
+          style: { accentColor: accent },
+        }),
+      );
+    }
+
+    function keyRow(state, accent, keyCtl) {
+      return h(
+        'div',
+        { style: S.row },
+        h('input', {
+          type: 'password',
+          value: keyCtl.key,
+          placeholder: state.configured
+            ? t('key.configured', { mask: state.keyMasked })
+            : t('key.placeholder'),
+          title: t('key.hint'),
+          onChange: (event) => keyCtl.setKey(event.target.value),
+          style: { ...S.input, flex: 1 },
+        }),
+        h(
+          'button',
+          {
+            type: 'button',
+            style: { ...S.primary, background: accent, borderColor: accent, opacity: keyCtl.busy ? 0.6 : 1 },
+            disabled: keyCtl.busy,
+            onClick: keyCtl.save,
+          },
+          keyCtl.busy ? t('key.testing') : t('save'),
+        ),
+      );
+    }
+
+    function usageRow(state) {
+      if (!state.usage) return null;
+      return h(
+        'div',
+        { style: S.hint },
+        t('usage', {
+          n: state.usage.chars || 0,
+          cost: (((state.usage.chars || 0) / 10000) * 0.8).toFixed(2),
+        }),
+      );
+    }
+
+    function settingsBody(state, accent, keyCtl, withColor) {
+      return h(
+        'div',
+        { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+        voiceRow(state),
+        rateRow(state, accent),
+        cleanRow(state, accent),
+        bargeRow(state, accent),
+        withColor ? h(AccentPicker, { accent, onChange: setAccent }) : null,
+        keyRow(state, accent, keyCtl),
+        usageRow(state),
+      );
+    }
+
+    function settingsButton(state, accent) {
+      // While the config read is in flight the button stays available; it only
+      // disappears when the host reports that no key is configured yet.
+      if (state.configReady && !state.configured) return null;
+      const open = settingsOpen(state);
+      return h(
+        'div',
+        { style: S.row },
+        h(
+          'button',
+          {
+            type: 'button',
+            onClick: toggleSettings,
+            style: {
+              ...S.btn,
+              borderColor: open ? accent : TOKENS.border,
+              color: open ? accent : TOKENS.ink,
+            },
+          },
+          '⚙ ' + (open ? t('settings.hide') : t('settings')),
+        ),
+      );
+    }
+
     function CallCard() {
       const state = useCall();
       const [now, setNow] = useState(Date.now());
@@ -1475,6 +1646,7 @@ window.__ModuleLoader__.load({
           setBusy(false);
         }
       };
+      const keyCtl = { key, setKey, busy, save };
 
       return h(
         'div',
@@ -1516,7 +1688,7 @@ window.__ModuleLoader__.load({
                           key: index,
                           style: {
                             ...S.line,
-                            color: line.role === 'user' ? TOKENS.ink : TOKENS.ink,
+                            color: TOKENS.ink,
                             background: line.role === 'user' ? TOKENS.brandSoft : TOKENS.surfaceSoft,
                           },
                         },
@@ -1534,69 +1706,6 @@ window.__ModuleLoader__.load({
                       ),
                     )
                   : h('div', { style: { color: TOKENS.muted } }, t('lines.empty')),
-              ),
-              state.voice || state.voices.length
-                ? h(
-                    'div',
-                    { style: S.row },
-                    h('span', { style: { ...S.label, flex: '0 0 auto' } }, t('voice')),
-                    h(
-                      'select',
-                      {
-                        value: state.voice,
-                        onChange: (event) => setVoice(event.target.value),
-                        style: { ...S.input, flex: 1 },
-                      },
-                      state.voices.map((voice) =>
-                        h(
-                          'option',
-                          { key: voice.id, value: voice.id },
-                          state.lang === 'en'
-                            ? voice.descEn
-                              ? `${voice.id} — ${voice.descEn}`
-                              : voice.id
-                            : `${voice.label}（${voice.desc}）`,
-                        ),
-                      ),
-                    ),
-                  )
-                : null,
-              h(
-                'label',
-                { style: S.label },
-                t('rate'),
-                h('input', {
-                  type: 'range',
-                  min: 0.7,
-                  max: 1.5,
-                  step: 0.05,
-                  value: state.rate,
-                  onChange: (event) => setRate(Number(event.target.value)),
-                  style: { flex: 1, accentColor: accent },
-                }),
-                h('span', { style: { width: 36, textAlign: 'right' } }, Number(state.rate).toFixed(2) + '×'),
-              ),
-              h(
-                'label',
-                { style: { ...S.label, justifyContent: 'space-between', cursor: 'pointer' } },
-                h('span', null, t('clean')),
-                h('input', {
-                  type: 'checkbox',
-                  checked: state.cleanSpeech !== false,
-                  onChange: (event) => setCleanSpeech(event.target.checked),
-                  style: { accentColor: accent },
-                }),
-              ),
-              h(
-                'label',
-                { style: { ...S.label, justifyContent: 'space-between', cursor: 'pointer' } },
-                h('span', null, t('bargeIn')),
-                h('input', {
-                  type: 'checkbox',
-                  checked: Boolean(state.bargeIn),
-                  onChange: (event) => setBargeIn(event.target.checked),
-                  style: { accentColor: accent },
-                }),
               ),
               h(
                 'div',
@@ -1620,37 +1729,8 @@ window.__ModuleLoader__.load({
                 ),
                 h('button', { type: 'button', style: S.btn, onClick: stopSpeaking }, t('interrupt')),
               ),
-              h(
-                'div',
-                { style: S.row },
-                h('input', {
-                  type: 'password',
-                  value: key,
-                  placeholder: state.configured
-                    ? t('key.configured', { mask: state.keyMasked })
-                    : t('key.placeholder'),
-                  title: t('key.hint'),
-                  onChange: (event) => setKey(event.target.value),
-                  style: { ...S.input, flex: 1 },
-                }),
-                h(
-                  'button',
-                  {
-                    type: 'button',
-                    style: { ...S.primary, background: accent, borderColor: accent, opacity: busy ? 0.6 : 1 },
-                    disabled: busy,
-                    onClick: save,
-                  },
-                  busy ? t('key.testing') : t('save'),
-                ),
-              ),
-              state.usage
-                ? h(
-                    'div',
-                    { style: S.hint },
-                    t('usage', { n: state.usage.chars || 0, cost: (((state.usage.chars || 0) / 10000) * 0.8).toFixed(2) }),
-                  )
-                : null,
+              settingsButton(state, accent),
+              settingsOpen(state) ? settingsBody(state, accent, keyCtl, false) : null,
             )
           : null,
       );
@@ -1738,6 +1818,7 @@ window.__ModuleLoader__.load({
           setBusy(false);
         }
       };
+      const keyCtl = { key, setKey, busy, save };
 
       return h(
         'div',
@@ -1764,94 +1845,8 @@ window.__ModuleLoader__.load({
             langButton(state, accent, 'en', 'English'),
           ),
           state.error ? h('div', { style: { color: TOKENS.danger } }, state.error) : null,
-          state.voices.length
-            ? h(
-                'div',
-                { style: S.row },
-                h('span', { style: { ...S.label, flex: '0 0 auto' } }, t('voice')),
-                h(
-                  'select',
-                  {
-                    value: state.voice,
-                    onChange: (event) => setVoice(event.target.value),
-                    style: { ...S.input, flex: 1 },
-                  },
-                  state.voices.map((voice) =>
-                    h(
-                      'option',
-                      { key: voice.id, value: voice.id },
-                      state.lang === 'en'
-                        ? voice.descEn
-                          ? `${voice.id} — ${voice.descEn}`
-                          : voice.id
-                        : `${voice.label}（${voice.desc}）`,
-                    ),
-                  ),
-                ),
-              )
-            : null,
-          h(
-            'label',
-            { style: S.label },
-            t('rate'),
-            h('input', {
-              type: 'range',
-              min: 0.7,
-              max: 1.5,
-              step: 0.05,
-              value: state.rate,
-              onChange: (event) => setRate(Number(event.target.value)),
-              style: { flex: 1, accentColor: accent },
-            }),
-            h('span', { style: { width: 36, textAlign: 'right' } }, Number(state.rate).toFixed(2) + '×'),
-          ),
-          h(
-            'label',
-            { style: { ...S.label, justifyContent: 'space-between', cursor: 'pointer' } },
-            h('span', null, t('clean')),
-            h('input', {
-              type: 'checkbox',
-              checked: state.cleanSpeech !== false,
-              onChange: (event) => setCleanSpeech(event.target.checked),
-              style: { accentColor: accent },
-            }),
-          ),
-          h(
-            'label',
-            { style: { ...S.label, justifyContent: 'space-between', cursor: 'pointer' } },
-            h('span', null, t('bargeIn')),
-            h('input', {
-              type: 'checkbox',
-              checked: Boolean(state.bargeIn),
-              onChange: (event) => setBargeIn(event.target.checked),
-              style: { accentColor: accent },
-            }),
-          ),
-          h(AccentPicker, { accent, onChange: setAccent }),
-          h(
-            'div',
-            { style: S.row },
-            h('input', {
-              type: 'password',
-              value: key,
-              placeholder: state.configured
-                ? t('key.configured', { mask: state.keyMasked })
-                : t('key.placeholder'),
-              title: t('key.hint'),
-              onChange: (event) => setKey(event.target.value),
-              style: { ...S.input, flex: 1 },
-            }),
-            h(
-              'button',
-              {
-                type: 'button',
-                style: { ...S.primary, background: accent, borderColor: accent, opacity: busy ? 0.6 : 1 },
-                disabled: busy,
-                onClick: save,
-              },
-              busy ? t('key.testing') : t('save'),
-            ),
-          ),
+          settingsButton(state, accent),
+          settingsOpen(state) ? settingsBody(state, accent, keyCtl, true) : null,
           h(
             'div',
             { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 2 } },

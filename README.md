@@ -32,6 +32,11 @@ microphone is touched until you press **Start call**:
 | --- | --- |
 | ![Setup panel](docs/shots/prep-panel-en.png) | ![Active call](docs/shots/call-card-en.png) |
 
+Everything else — voice, rate, speech cleaning, voice barge-in, button colour and
+the API key — sits behind the **⚙ Settings** button, so both panels stay small:
+
+![Settings](docs/shots/settings-open.png)
+
 The widget follows the language chosen in the setup panel (中文 / English), and
 the button colour picked there applies to the whole call UI. Screenshots are
 rendered from the plugin's own components with demo content.
@@ -40,13 +45,12 @@ rendered from the plugin's own components with demo content.
 
 1. Click **🎙 通话** at the bottom right. It opens a **pre-call panel** instead of
    starting immediately.
-2. Choose the interface language (中文 / English), voice, rate, speech cleaning,
-   voice barge-in and button colour there; paste the API key on the same panel
-   when none is configured yet.
+2. Pick the interface language, then press **⚙ 配置** for voice, rate, speech
+   cleaning, voice barge-in, button colour and the API key.
 3. Press **开始通话**. The panel becomes the call card, the microphone opens, and
    what you say arrives as a normal user message.
 4. **暂停** stops listening and playback; **打断** stops only the current reading;
-   **✕** ends the call.
+   **✕** ends the call. The same **⚙ 配置** block is available inside the call.
 
 The button colour and the cleaning switch are per browser (`localStorage`); the
 voice and rate are stored with the profile.
