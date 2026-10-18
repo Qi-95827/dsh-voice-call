@@ -132,6 +132,15 @@
 | `locale/*.json` | 插件管理页的标题与描述 |
 | `icon.svg` | 插件图标 |
 
+## 开发
+
+```sh
+npm run check   # 校验 package.json、BOM、bundle patch、locale、图标
+npm test        # 组件契约与朗读流水线，不需要浏览器
+```
+
+`npm run check` 是专门为这次踩过的坑加的：`package.json` 开头多一个 UTF-8 BOM，DSH 就会在启动时直接跳过整个 bundle；有这条检查会当场报错，而不是等装完才发现「包不可用」。
+
 ## 许可
 
 MIT —— 见 [LICENSE](LICENSE)。

@@ -205,6 +205,16 @@ widget shows the error) instead of affecting the rest of the Harness.
 | `icon.svg` | Plugin icon |
 | `README.md`, `README.zh.md` | English and Chinese documentation |
 
+## Development
+
+```sh
+npm run check   # package.json, BOM, bundle patch, locales, icon
+npm test        # component contract and speech pipeline, no browser needed
+```
+
+`npm run check` exists because a stray UTF-8 BOM in `package.json` is enough for
+DSH to skip the whole bundle at startup; the check fails loudly instead.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
