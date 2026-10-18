@@ -40,9 +40,9 @@ rendered from the plugin's own components with demo content.
 
 1. Click **🎙 通话** at the bottom right. It opens a **pre-call panel** instead of
    starting immediately.
-2. Choose the interface language (中文 / English), voice, rate, speech cleaning
-   and button colour there; paste the API key on the same panel when none is
-   configured yet.
+2. Choose the interface language (中文 / English), voice, rate, speech cleaning,
+   voice barge-in and button colour there; paste the API key on the same panel
+   when none is configured yet.
 3. Press **开始通话**. The panel becomes the call card, the microphone opens, and
    what you say arrives as a normal user message.
 4. **暂停** stops listening and playback; **打断** stops only the current reading;
@@ -130,17 +130,24 @@ Open the call widget and paste an Alibaba Cloud DashScope API key (`sk-…`).
 - `DASHSCOPE_API_KEY` in the environment works as a last resort.
 
 Non-secret preferences (voice, rate, monthly character count) live in
-`~/.dsh/voice-call.json`. The interface language, the "朗读清洗" switch and the
-button colour are per browser and stored in `localStorage`; the colour defaults
-to DeepSeek blue (`#4D6BFE`), is picked from swatches or any custom value, and is
-offered only in the pre-call panel — the in-call card does not show it, so it
-cannot be changed by accident mid-call.
+`~/.dsh/voice-call.json`. The interface language, the "朗读清洗" switch, voice
+barge-in and the button colour are per browser and stored in `localStorage`; the
+colour defaults to DeepSeek blue (`#4D6BFE`), is picked from swatches or any
+custom value, and is offered only in the pre-call panel — the in-call card does
+not show it, so it cannot be changed by accident mid-call.
 
 ## Behaviour notes
 
 - **“打断” stops the reading only.** It aborts the current speech fetches, clears
   the queue, and keeps the agent generating. Speaking again while the turn is
   still running sends that message with `steer`.
+- **Voice barge-in is opt-in and off by default.** With 语音打断 on, the
+  microphone stays open while the reply is read: start talking and the reading
+  stops within a fraction of a second, the sentence is captured, and it goes in
+  as a normal message (or a `steer` when the reply is still being generated). If
+  nothing is recognized within 2.5 seconds — a cough, a door, playback echo —
+  the reading resumes where it stopped instead of losing the rest. The toggle is
+  on both the setup panel and the call card.
 - **Speech starts while the reply streams.** Each completed sentence (or 90
   characters, whichever comes first) is synthesized immediately instead of
   waiting for `turn/end`, so the first audio no longer waits for the whole
@@ -169,6 +176,9 @@ cannot be changed by accident mid-call.
 - Microphone audio is recorded in the page, converted to WAV, and posted to the
   local Host. Recognition runs through the profile's own provider; nothing is
   uploaded to a speech service beyond what that provider already does.
+  With voice barge-in **off** (the default) the microphone is released as soon
+  as each turn stops listening; with it **on** the microphone stays open while
+  the reply is read, because it has to hear you start talking.
 - The transcript becomes a normal user message, so it is stored in the session
   log like typed text.
 - Spoken text is sent to Alibaba DashScope for synthesis. That request carries

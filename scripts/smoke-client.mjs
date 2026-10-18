@@ -125,6 +125,15 @@ function findButton(tree, text) {
   )[0];
 }
 
+function findToggle(tree, text) {
+  const label = walk(
+    tree,
+    (node) => node.type === 'label' && JSON.stringify(node.props?.children ?? '').includes(text),
+  )[0];
+  if (!label) return null;
+  return [].concat(label.props.children || []).find((child) => child && child.type === 'input') || null;
+}
+
 /* ------------------------------------------------------------- launcher */
 
 const launcher = render(component());
@@ -145,6 +154,14 @@ if (retained) throw new Error('opening the panel must not start a call yet');
 const prep = render(component());
 if (!JSON.stringify(prep).includes('开始通话')) throw new Error('pre-call panel did not render');
 if (!JSON.stringify(prep).includes('按钮颜色')) throw new Error('pre-call panel has no colour picker');
+
+// Voice barge-in exists, defaults to off, and can be turned on.
+const bargeToggle = findToggle(prep, '语音打断');
+if (!bargeToggle) throw new Error('barge-in toggle missing');
+if (bargeToggle.props.checked !== false) throw new Error('barge-in must default to off');
+bargeToggle.props.onChange({ target: { checked: true } });
+const prepBargeOn = render(component());
+if (findToggle(prepBargeOn, '语音打断')?.props.checked !== true) throw new Error('barge-in toggle did not stick');
 
 // Language switcher: English copy replaces the Chinese one, and the layout stays.
 const englishButton = findButton(prep, 'English');

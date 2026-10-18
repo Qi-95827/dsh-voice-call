@@ -40,6 +40,11 @@ window.__ModuleLoader__.load({
     const IDLE_MS = 10000;
     const FIRST_CHUNK = 90;
     const SPEECH_TAIL_MS = 600;
+    // Voice barge-in: ignore the first moments of playback, then require a
+    // sustained voice before stopping the reading.
+    const BARGE_GRACE_MS = 400;
+    const BARGE_FRAMES = 5;
+    const BARGE_CONFIRM_MS = 2500;
 
     const DEFAULT_ACCENT = '#4D6BFE';
     const ACCENTS = ['#4D6BFE', '#0EA5E9', '#14B8A6', '#8B5CF6', '#EC4899', '#F97316', '#22C55E', '#1F2937'];
@@ -78,6 +83,7 @@ window.__ModuleLoader__.load({
         'voice': '音色',
         'rate': '语速',
         'clean': '朗读清洗（跳过表格/代码）',
+        'bargeIn': '语音打断（我说话就停止朗读）',
         'color': '按钮颜色',
         'color.custom': '自定义颜色',
         'key.configured': '已配置 {mask}',
@@ -136,6 +142,7 @@ window.__ModuleLoader__.load({
         'voice': 'Voice',
         'rate': 'Rate',
         'clean': 'Skip code and tables when reading',
+        'bargeIn': 'Stop reading when I speak',
         'color': 'Button colour',
         'color.custom': 'Custom colour',
         'key.configured': 'Key set: {mask}',
@@ -209,6 +216,19 @@ window.__ModuleLoader__.load({
       } catch {}
     }
 
+    let storedBargeIn = false;
+    try {
+      storedBargeIn = localStorage.getItem('dsh-voice-call-barge-in') === '1';
+    } catch {}
+
+    function setBargeIn(value) {
+      set({ bargeIn: Boolean(value) });
+      try {
+        localStorage.setItem('dsh-voice-call-barge-in', value ? '1' : '0');
+      } catch {}
+      if (!value) stopBargeWatch();
+    }
+
     const listeners = new Set();
     let call = {
       active: false,
@@ -230,6 +250,7 @@ window.__ModuleLoader__.load({
       cleanSpeech: true,
       accent: storedAccent,
       lang: storedLang,
+      bargeIn: storedBargeIn,
     };
 
     function set(patch) {
@@ -505,6 +526,7 @@ window.__ModuleLoader__.load({
 
     function resetSpeechPlayback() {
       speechEpoch += 1;
+      speechSuspended = false;
       speechQueue = [];
       speechAbort.abort();
       speechAbort = new AbortController();
@@ -530,23 +552,130 @@ window.__ModuleLoader__.load({
       return await response.blob();
     }
 
+    /* ------------------------------------------------------------------ *
+     * Voice barge-in
+     * ------------------------------------------------------------------ */
+
+    let speechSuspended = false;
+    let resumeAfterSilence = false;
+    let bargeWatcher = null;
+    let echoFloor = 0;
+    let aboveFrames = 0;
+
+    function stopBargeWatch() {
+      if (bargeWatcher) {
+        clearInterval(bargeWatcher);
+        bargeWatcher = null;
+      }
+      aboveFrames = 0;
+    }
+
+    function startBargeWatch() {
+      if (!call.bargeIn || bargeWatcher) return;
+      if (!mic) {
+        ensureMic()
+          .then(() => {
+            if (call.bargeIn && !bargeWatcher && mic) startBargeWatch();
+          })
+          .catch(() => {});
+        return;
+      }
+      const startedAt = Date.now();
+      echoFloor = 0;
+      aboveFrames = 0;
+      bargeWatcher = setInterval(() => {
+        if (!call.active || call.paused || !call.bargeIn || speechSuspended) {
+          if (!call.active || call.paused || !call.bargeIn) stopBargeWatch();
+          return;
+        }
+        // Nothing queued and nothing playing means this speech round is over.
+        if (!audioEl && !speechQueue.length) {
+          stopBargeWatch();
+          return;
+        }
+        if (Date.now() - startedAt < BARGE_GRACE_MS) return;
+        if (!mic) return;
+        const rms = readRms(mic.analyser);
+        // During playback the echo of our own voice raises the floor; requiring
+        // several frames well above it favours missing a barge-in over
+        // stopping on playback alone.
+        const threshold = Math.max(MIC_THRESHOLD * 1.8, echoFloor * 2.5);
+        if (rms > threshold) {
+          aboveFrames += 1;
+          if (aboveFrames >= BARGE_FRAMES) onBargeIn();
+        } else {
+          aboveFrames = 0;
+          echoFloor = echoFloor * 0.9 + rms * 0.1;
+        }
+      }, 50);
+    }
+
+    /** Pause the current chunk but keep the queue, so a false trigger resumes. */
+    function suspendSpeech() {
+      if (!speechQueue.length && !audioEl) return false;
+      speechSuspended = true;
+      if (audioEl) {
+        try {
+          audioEl.pause();
+        } catch {}
+      }
+      return true;
+    }
+
+    function resumeSpeech() {
+      if (!call.active || call.paused) return;
+      speechSuspended = false;
+      if (audioEl) {
+        audioEl.play().catch(() => {});
+        return;
+      }
+      if (speechQueue.length) pumpSpeech();
+    }
+
+    function dropSuspendedSpeech() {
+      speechSuspended = false;
+      resumeAfterSilence = false;
+      resetSpeechPlayback();
+    }
+
+    /** The user started speaking while the reply was being read. */
+    function onBargeIn() {
+      if (!call.active || call.paused || listening) return;
+      stopBargeWatch();
+      if (!suspendSpeech()) return;
+      resumeAfterSilence = true;
+      if (turnRunning) {
+        suppressTurnSpeech = true;
+        steerNext = true;
+      }
+      set({ phase: 'listening', error: null });
+      listenLoop({ confirm: BARGE_CONFIRM_MS });
+    }
+
     async function pumpSpeech() {
       if (speechPumpRunning) return;
       speechPumpRunning = true;
       const epoch = speechEpoch;
+      if (!call.bargeIn) releaseMic();
+      else startBargeWatch();
       try {
         while (speechQueue.length && epoch === speechEpoch && call.active && !call.paused) {
-          const item = speechQueue.shift();
-          const next = speechQueue[0];
+          if (speechSuspended) break;
+          // Keep the item in the queue until it is really about to play, so a
+          // suspension during the fetch does not lose a chunk.
+          const item = speechQueue[0];
+          const next = speechQueue[1];
           if (next && !next.promise) next.promise = fetchSpeech(next.text, speechAbort.signal);
           const blob = await (item.promise || fetchSpeech(item.text, speechAbort.signal));
-          if (epoch !== speechEpoch || !call.active || call.paused) break;
+          if (epoch !== speechEpoch || !call.active || call.paused || speechSuspended) break;
+          speechQueue.shift();
           await playBlob(blob);
         }
       } catch (err) {
         if (err?.name !== 'AbortError') set({ error: t('error.tts', { message: err?.message || err }) });
       } finally {
         speechPumpRunning = false;
+        stopBargeWatch();
         if (epoch === speechEpoch && !speechQueue.length && turnDone && call.active && !call.paused) {
           turnDone = false;
           setTimeout(listenLoop, SPEECH_TAIL_MS);
@@ -810,22 +939,64 @@ window.__ModuleLoader__.load({
       return output;
     }
 
-    async function recordUtterance() {
+    /* ------------------------------------------------------------------ *
+     * Microphone
+     * ------------------------------------------------------------------ */
+
+    // One stream and one AudioContext for the whole call: it removes the
+    // 100-300 ms device setup from every turn and gives the barge-in watcher an
+    // analyser to read while audio is playing.
+    let mic = null;
+
+    async function ensureMic() {
+      if (mic) {
+        if (mic.context.state === 'suspended') await mic.context.resume().catch(() => {});
+        return mic;
+      }
       if (!navigator.mediaDevices?.getUserMedia) throw new Error(t('error.mic'));
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
-      const audioContext = new AudioContext();
-      await audioContext.resume();
-      const source = audioContext.createMediaStreamSource(stream);
-      const analyser = audioContext.createAnalyser();
+      const context = new AudioContext();
+      await context.resume();
+      const source = context.createMediaStreamSource(stream);
+      const analyser = context.createAnalyser();
       analyser.fftSize = 1024;
       source.connect(analyser);
       // The analyser only produces data while it is pulled by a sink.
-      const silent = audioContext.createGain();
-      silent.gain.value = 0;
-      analyser.connect(silent);
-      silent.connect(audioContext.destination);
+      const sink = context.createGain();
+      sink.gain.value = 0;
+      analyser.connect(sink);
+      sink.connect(context.destination);
+      mic = { stream, context, analyser, source, sink };
+      return mic;
+    }
+
+    function releaseMic() {
+      stopBargeWatch();
+      if (!mic) return;
+      try {
+        mic.stream.getTracks().forEach((track) => track.stop());
+      } catch {}
+      try {
+        mic.context.close();
+      } catch {}
+      mic = null;
+    }
+
+    function readRms(analyser) {
+      const data = new Uint8Array(analyser.fftSize);
+      analyser.getByteTimeDomainData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) {
+        const value = (data[i] - 128) / 128;
+        sum += value * value;
+      }
+      return Math.sqrt(sum / data.length);
+    }
+
+    async function recordUtterance(idleMs = IDLE_MS, silenceMs = SILENCE_MS) {
+      const { stream, context, analyser } = await ensureMic();
       const recorder = new MediaRecorder(stream);
       const chunks = [];
       recorder.ondataavailable = (event) => {
@@ -852,14 +1023,7 @@ window.__ModuleLoader__.load({
         finish();
       };
       const timer = setInterval(() => {
-        const data = new Uint8Array(analyser.fftSize);
-        analyser.getByteTimeDomainData(data);
-        let sum = 0;
-        for (let i = 0; i < data.length; i++) {
-          const value = (data[i] - 128) / 128;
-          sum += value * value;
-        }
-        const rms = Math.sqrt(sum / data.length);
+        const rms = readRms(analyser);
         const now = Date.now();
         set({ level: Math.min(1, rms * 30) });
         if (now - started > 450) {
@@ -873,34 +1037,32 @@ window.__ModuleLoader__.load({
             aboveSince = 0;
           }
         }
-        if (!spoken && now - started > IDLE_MS) finish();
-        else if (spoken && now - lastVoice > SILENCE_MS) finish();
+        if (!spoken && now - started > idleMs) finish();
+        else if (spoken && now - lastVoice > silenceMs) finish();
         else if (now - started > MAX_RECORD_MS) finish();
       }, 100);
       await stopped;
       clearInterval(timer);
       forceStopRecording = null;
-      stream.getTracks().forEach((track) => track.stop());
       let wav = null;
       if (spoken && chunks.length) {
         const blob = new Blob(chunks, { type: chunks[0].type || 'audio/webm' });
         const array = await blob.arrayBuffer();
-        const decoded = await audioContext.decodeAudioData(array);
+        const decoded = await context.decodeAudioData(array);
         const samples = resample(decoded.getChannelData(0), decoded.sampleRate, 16000);
         wav = encodeWav(samples, 16000);
       }
-      await audioContext.close().catch(() => {});
       set({ level: 0 });
       return wav ? base64(wav) : null;
     }
 
-    async function listenLoop() {
+    async function listenLoop(options = {}) {
       if (!call.active || call.paused || listening || !binding || !call.configured) return;
       const gen = generation;
       listening = true;
       set({ phase: 'listening', error: null });
       try {
-        const audio = await recordUtterance();
+        const audio = await recordUtterance(options.confirm || IDLE_MS);
         // A teardown, pause or end-call during the recording invalidates this run.
         if (gen !== generation || !call.active || call.paused) {
           listening = false;
@@ -908,6 +1070,12 @@ window.__ModuleLoader__.load({
         }
         if (!audio) {
           listening = false;
+          if (resumeAfterSilence) {
+            // A false trigger: nothing was said, so keep reading where we stopped.
+            resumeAfterSilence = false;
+            resumeSpeech();
+            return;
+          }
           if (call.active && !call.paused) setTimeout(listenLoop, 250);
           return;
         }
@@ -933,9 +1101,17 @@ window.__ModuleLoader__.load({
           typeof raw === 'string' ? raw.trim() : String(raw?.text ?? raw?.transcript ?? '').trim();
         if (!text) {
           listening = false;
+          if (resumeAfterSilence) {
+            resumeAfterSilence = false;
+            resumeSpeech();
+            return;
+          }
           if (call.active && !call.paused) setTimeout(listenLoop, 250);
           return;
         }
+        // A real utterance replaced the suspended reading: drop the rest of it.
+        resumeAfterSilence = false;
+        if (speechSuspended) dropSuspendedSpeech();
         appendLine('user', text);
         resetSpeechStream();
         turnDone = false;
@@ -988,6 +1164,10 @@ window.__ModuleLoader__.load({
         forceStopRecording?.();
       } catch {}
       stopAudio();
+      stopBargeWatch();
+      releaseMic();
+      speechSuspended = false;
+      resumeAfterSilence = false;
       if (turnTimer) clearTimeout(turnTimer);
       turnTimer = null;
       resetSpeechStream();
@@ -1094,6 +1274,10 @@ window.__ModuleLoader__.load({
         forceStopRecording?.();
       } catch {}
       stopAudio();
+      stopBargeWatch();
+      releaseMic();
+      speechSuspended = false;
+      resumeAfterSilence = false;
       if (turnTimer) clearTimeout(turnTimer);
       turnTimer = null;
       resetSpeechStream();
@@ -1136,6 +1320,8 @@ window.__ModuleLoader__.load({
     /** “打断” stops the reply being read out. It never stops the agent. */
     function stopSpeaking() {
       if (!call.active) return;
+      stopBargeWatch();
+      resumeAfterSilence = false;
       resetSpeechPlayback();
       // Drop whatever of this reply has not been spoken yet.
       pendingSpeech = '';
@@ -1402,6 +1588,17 @@ window.__ModuleLoader__.load({
                 }),
               ),
               h(
+                'label',
+                { style: { ...S.label, justifyContent: 'space-between', cursor: 'pointer' } },
+                h('span', null, t('bargeIn')),
+                h('input', {
+                  type: 'checkbox',
+                  checked: Boolean(state.bargeIn),
+                  onChange: (event) => setBargeIn(event.target.checked),
+                  style: { accentColor: accent },
+                }),
+              ),
+              h(
                 'div',
                 { style: S.row },
                 h('span', { style: S.label }, t('mic', { n: Math.round((state.level || 0) * 100) })),
@@ -1616,6 +1813,17 @@ window.__ModuleLoader__.load({
               type: 'checkbox',
               checked: state.cleanSpeech !== false,
               onChange: (event) => setCleanSpeech(event.target.checked),
+              style: { accentColor: accent },
+            }),
+          ),
+          h(
+            'label',
+            { style: { ...S.label, justifyContent: 'space-between', cursor: 'pointer' } },
+            h('span', null, t('bargeIn')),
+            h('input', {
+              type: 'checkbox',
+              checked: Boolean(state.bargeIn),
+              onChange: (event) => setBargeIn(event.target.checked),
               style: { accentColor: accent },
             }),
           ),
