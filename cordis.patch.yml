@@ -1,0 +1,10 @@
+# dsh-voice-call bundle layer.
+#
+# One Host row owns the /voice-call HTTP routes (speech-to-text through the
+# profile's speech controller, text-to-speech through DashScope). The Client
+# half is discovered from package.json's `dsh.client` section and renders the
+# call overlay into the `shell.overlay` slot, so it stays above every panel and
+# survives switching sessions.
+- insert:
+    - id: dsh-voice-call
+      name: 'dsh-voice-call'
