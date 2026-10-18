@@ -145,7 +145,16 @@ if (retained) throw new Error('opening the panel must not start a call yet');
 const prep = render(component());
 if (!JSON.stringify(prep).includes('开始通话')) throw new Error('pre-call panel did not render');
 if (!JSON.stringify(prep).includes('按钮颜色')) throw new Error('pre-call panel has no colour picker');
-const startButton = findButton(prep, '开始通话');
+
+// Language switcher: English copy replaces the Chinese one, and the layout stays.
+const englishButton = findButton(prep, 'English');
+if (!englishButton) throw new Error('language switcher missing');
+englishButton.props.onClick();
+const prepEn = render(component());
+if (!JSON.stringify(prepEn).includes('Start call')) throw new Error('English copy not applied');
+if (JSON.stringify(prepEn).includes('开始通话')) throw new Error('Chinese copy still present after switching');
+
+const startButton = findButton(prepEn, 'Start call');
 if (!startButton) throw new Error('start-call button missing');
 startButton.props.onClick();
 await sleep(20);
@@ -160,7 +169,7 @@ const card = render(component());
 const cardChildren = [].concat(card.props.children).filter(Boolean);
 if (cardChildren.length < 2) throw new Error('active card did not render pill and panel');
 const pill = cardChildren[0];
-if (!JSON.stringify(pill.props.children).includes('通话中')) throw new Error('pill does not show 通话中');
+if (!JSON.stringify(pill.props.children).includes('In call')) throw new Error('pill does not show the English call state');
 if (JSON.stringify(card).includes('按钮颜色')) throw new Error('active card must not offer the colour picker');
 
 console.log('client contract OK');

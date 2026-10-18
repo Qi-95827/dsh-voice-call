@@ -60,6 +60,155 @@ window.__ModuleLoader__.load({
       storedAccent = normalizeAccent(localStorage.getItem('dsh-voice-call-accent') || DEFAULT_ACCENT);
     } catch {}
 
+    /**
+     * Widget copy. `zh` is the fallback for any key missing from `en`, so a new
+     * string never renders as a bare key.
+     */
+    const STRINGS = {
+      zh: {
+        'app.title': '语音通话',
+        'app.setup': '准备',
+        'lang': '语言',
+        'launcher.label': '通话',
+        'launcher.title': '打开语音通话设置',
+        'notice.noService': '会话服务未就绪',
+        'notice.noSession': '先打开一个会话',
+        'prep.session': '将在当前会话开始：{id}…',
+        'prep.noSession': '还没打开会话，先打开一个会话',
+        'voice': '音色',
+        'rate': '语速',
+        'clean': '朗读清洗（跳过表格/代码）',
+        'color': '按钮颜色',
+        'color.custom': '自定义颜色',
+        'key.configured': '已配置 {mask}',
+        'key.hint': '粘贴新 Key 可替换',
+        'key.placeholder': '阿里云 API Key（sk-...）',
+        'key.testing': '测试中…',
+        'save': '保存',
+        'cancel': '取消',
+        'start': '开始通话',
+        'call.active': '通话中',
+        'call.paused': '已暂停',
+        'pause': '暂停',
+        'resume': '继续',
+        'collapse': '收起',
+        'expand': '展开',
+        'end': '结束通话',
+        'session.bound': '绑定会话 {id}…',
+        'lines.empty': '说话后，转写和回答会显示在这里。',
+        'role.user': '你：',
+        'role.assistant': '助手：',
+        'mic': '麦克风 {n}%',
+        'send': '说完',
+        'interrupt': '打断',
+        'usage': '本月 {n} 字符 ≈ ¥{cost}',
+        'speech.fallback': '具体内容我放在消息里了。',
+        'speech.link': '链接',
+        'phase.connecting': '连接会话…',
+        'phase.listening': '在听…',
+        'phase.transcribing': '识别中…',
+        'phase.thinking': '思考中…',
+        'phase.speaking': '朗读中…',
+        'phase.error': '出错',
+        'phase.idle': '空闲',
+        'error.tts': '朗读失败：{message}',
+        'error.ttsTimeout': '朗读超时',
+        'error.audio': '音频播放失败',
+        'error.config': '读取语音配置失败：{message}',
+        'error.save': '保存失败',
+        'error.mic': '当前环境不支持麦克风',
+        'error.asr': '语音识别失败',
+        'error.send': '发送失败',
+        'error.start': '开始通话失败：{message}',
+        'error.noService': '会话服务未就绪，无法开始通话',
+        'error.needKey': '先填一个阿里云 API Key，再开始通话',
+      },
+      en: {
+        'app.title': 'Voice call',
+        'app.setup': 'Setup',
+        'lang': 'Language',
+        'launcher.label': 'Call',
+        'launcher.title': 'Open voice call settings',
+        'notice.noService': 'Session service is not ready',
+        'notice.noSession': 'Open a session first',
+        'prep.session': 'Starts in this session: {id}…',
+        'prep.noSession': 'No session open — open one first',
+        'voice': 'Voice',
+        'rate': 'Rate',
+        'clean': 'Skip code and tables when reading',
+        'color': 'Button colour',
+        'color.custom': 'Custom colour',
+        'key.configured': 'Key set: {mask}',
+        'key.hint': 'Paste a new key to replace',
+        'key.placeholder': 'Alibaba Cloud API key (sk-...)',
+        'key.testing': 'Testing…',
+        'save': 'Save',
+        'cancel': 'Cancel',
+        'start': 'Start call',
+        'call.active': 'In call',
+        'call.paused': 'Paused',
+        'pause': 'Pause',
+        'resume': 'Resume',
+        'collapse': 'Collapse',
+        'expand': 'Expand',
+        'end': 'End call',
+        'session.bound': 'Bound session {id}…',
+        'lines.empty': 'Speak, and the transcript appears here.',
+        'role.user': 'You: ',
+        'role.assistant': 'Assistant: ',
+        'mic': 'Mic {n}%',
+        'send': 'Done',
+        'interrupt': 'Stop reading',
+        'usage': '{n} chars this month ≈ ¥{cost}',
+        'speech.fallback': "I've put the details in the message.",
+        'speech.link': 'link',
+        'phase.connecting': 'Connecting…',
+        'phase.listening': 'Listening…',
+        'phase.transcribing': 'Transcribing…',
+        'phase.thinking': 'Thinking…',
+        'phase.speaking': 'Reading aloud…',
+        'phase.error': 'Error',
+        'phase.idle': 'Idle',
+        'error.tts': 'Speech failed: {message}',
+        'error.ttsTimeout': 'Speech timed out',
+        'error.audio': 'Audio playback failed',
+        'error.config': 'Failed to read voice settings: {message}',
+        'error.save': 'Save failed',
+        'error.mic': 'This environment has no microphone',
+        'error.asr': 'Speech recognition failed',
+        'error.send': 'Failed to send',
+        'error.start': 'Could not start the call: {message}',
+        'error.noService': 'Session service is not ready, cannot start the call',
+        'error.needKey': 'Add an Alibaba Cloud API key before starting the call',
+      },
+    };
+
+    let storedLang = 'zh';
+    try {
+      storedLang = localStorage.getItem('dsh-voice-call-lang') === 'en' ? 'en' : 'zh';
+    } catch {}
+
+    function t(key, vars) {
+      const table = STRINGS[call.lang] || STRINGS.zh;
+      let text = table[key];
+      if (text === undefined) text = STRINGS.zh[key];
+      if (text === undefined) return key;
+      if (vars) {
+        for (const name of Object.keys(vars)) {
+          text = text.split('{' + name + '}').join(String(vars[name]));
+        }
+      }
+      return text;
+    }
+
+    function setLang(value) {
+      const lang = value === 'en' ? 'en' : 'zh';
+      set({ lang });
+      try {
+        localStorage.setItem('dsh-voice-call-lang', lang);
+      } catch {}
+    }
+
     const listeners = new Set();
     let call = {
       active: false,
@@ -80,6 +229,7 @@ window.__ModuleLoader__.load({
       level: 0,
       cleanSpeech: true,
       accent: storedAccent,
+      lang: storedLang,
     };
 
     function set(patch) {
@@ -241,7 +391,7 @@ window.__ModuleLoader__.load({
         .replace(/`([^`]+)`/g, '$1')
         .replace(/[*_~]{1,3}/g, '')
         .replace(/<[^>]+>/g, '')
-        .replace(/https?:\/\/\S+/g, '链接')
+        .replace(/https?:\/\/\S+/g, t('speech.link'))
         .replace(/\s+/g, ' ')
         .trim();
     }
@@ -394,7 +544,7 @@ window.__ModuleLoader__.load({
           await playBlob(blob);
         }
       } catch (err) {
-        if (err?.name !== 'AbortError') set({ error: '朗读失败：' + (err?.message || err) });
+        if (err?.name !== 'AbortError') set({ error: t('error.tts', { message: err?.message || err }) });
       } finally {
         speechPumpRunning = false;
         if (epoch === speechEpoch && !speechQueue.length && turnDone && call.active && !call.paused) {
@@ -430,9 +580,9 @@ window.__ModuleLoader__.load({
             }
           };
           audio._finish = finish;
-          timer = setTimeout(() => finish(new Error('朗读超时')), 90000);
+          timer = setTimeout(() => finish(new Error(t('error.ttsTimeout'))), 90000);
           audio.onended = () => finish();
-          audio.onerror = () => finish(new Error('音频播放失败'));
+          audio.onerror = () => finish(new Error(t('error.audio')));
           audio.play().catch((error) => finish(error));
         });
       } finally {
@@ -510,7 +660,7 @@ window.__ModuleLoader__.load({
         if (speak) flushSpeech(true);
         // A reply with nothing speakable (code or a table only) still gets one
         // short line, so the call never looks stuck.
-        if (speak && full && !spokeThisTurn) enqueueSentence('具体内容我放在消息里了。');
+        if (speak && full && !spokeThisTurn) enqueueSentence(t('speech.fallback'));
         const spoke = spokeThisTurn;
         pendingSpeech = '';
         resetSpeechStream();
@@ -562,7 +712,7 @@ window.__ModuleLoader__.load({
           usage: data.usage || null,
         });
       } catch (err) {
-        set({ error: '读取语音配置失败：' + (err?.message || err) });
+        set({ error: t('error.config', { message: err?.message || err }) });
       }
     }
 
@@ -573,7 +723,7 @@ window.__ModuleLoader__.load({
         body: JSON.stringify({ apiKey: key }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || '保存失败');
+      if (!response.ok) throw new Error(data.error || t('error.save'));
       set({ configured: Boolean(data.configured), keyMasked: data.keyMasked || '', error: null });
       if (call.active && !call.paused) {
         set({ phase: 'listening' });
@@ -661,7 +811,7 @@ window.__ModuleLoader__.load({
     }
 
     async function recordUtterance() {
-      if (!navigator.mediaDevices?.getUserMedia) throw new Error('当前环境不支持麦克风');
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error(t('error.mic'));
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
@@ -775,7 +925,7 @@ window.__ModuleLoader__.load({
         if (!response.ok) {
           const detail = data.error;
           throw new Error(
-            typeof detail === 'string' ? detail : detail?.message || JSON.stringify(detail) || '语音识别失败',
+            typeof detail === 'string' ? detail : detail?.message || JSON.stringify(detail) || t('error.asr'),
           );
         }
         const raw = data.text;
@@ -797,7 +947,7 @@ window.__ModuleLoader__.load({
         if (gen !== generation) return;
         steerNext = false;
         turnRunning = true;
-        if (!sent.ok) throw new Error(sent.error?.message || '发送失败');
+        if (!sent.ok) throw new Error(sent.error?.message || t('error.send'));
         turnTimer = setTimeout(() => {
           turnTimer = null;
           if (!call.active) return;
@@ -889,14 +1039,14 @@ window.__ModuleLoader__.load({
       if (call.active || starting || !sessionId) return;
       const api = sessionApi();
       if (!api?.sessions?.retain) {
-        set({ prepared: true, error: '会话服务未就绪，无法开始通话' });
+        set({ prepared: true, error: t('error.noService') });
         return;
       }
       starting = true;
       try {
         await loadConfig();
         if (!call.configured) {
-          set({ prepared: true, error: '先填一个阿里云 API Key，再开始通话' });
+          set({ prepared: true, error: t('error.needKey') });
           return;
         }
       } finally {
@@ -934,7 +1084,7 @@ window.__ModuleLoader__.load({
         listenLoop();
       } catch (err) {
         if (gen !== generation) return;
-        set({ phase: 'error', error: '开始通话失败：' + (err?.message || err) });
+        set({ phase: 'error', error: t('error.start', { message: err?.message || err }) });
       }
     }
 
@@ -1107,16 +1257,9 @@ window.__ModuleLoader__.load({
       hint: { color: TOKENS.muted, fontSize: 10.5 },
     };
 
-    const PHASES = {
-      connecting: '连接会话…',
-      listening: '在听…',
-      transcribing: '识别中…',
-      thinking: '思考中…',
-      speaking: '朗读中…',
-      'need-key': '需要 API Key',
-      error: '出错',
-      idle: '空闲',
-    };
+    function phaseText(phase) {
+      return t('phase.' + (phase || 'idle'));
+    }
 
     function CallCard() {
       const state = useCall();
@@ -1154,15 +1297,15 @@ window.__ModuleLoader__.load({
           'div',
           { style: S.pill },
           h('span', { style: { ...S.dot, background: state.paused ? TOKENS.warn : accent } }),
-          h('span', { style: { fontWeight: 600 } }, state.paused ? '已暂停' : '通话中'),
+          h('span', { style: { fontWeight: 600 } }, state.paused ? t('call.paused') : t('call.active')),
           h('span', { style: S.clock }, clock),
-          h('button', { type: 'button', style: S.btn, onClick: togglePause }, state.paused ? '继续' : '暂停'),
+          h('button', { type: 'button', style: S.btn, onClick: togglePause }, state.paused ? t('resume') : t('pause')),
           h(
             'button',
             { type: 'button', style: S.btn, onClick: () => set({ expanded: !state.expanded }) },
-            state.expanded ? '收起' : '展开',
+            state.expanded ? t('collapse') : t('expand'),
           ),
-          h('button', { type: 'button', style: S.close, title: '结束通话', onClick: endCall }, '✕'),
+          h('button', { type: 'button', style: S.close, title: t('end'), onClick: endCall }, '✕'),
         ),
         state.expanded
           ? h(
@@ -1171,10 +1314,10 @@ window.__ModuleLoader__.load({
               h(
                 'div',
                 { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
-                h('strong', { style: { fontSize: 13 } }, '语音通话'),
-                h('span', { style: { color: accent, fontWeight: 500 } }, PHASES[state.phase] || '空闲'),
+                h('strong', { style: { fontSize: 13 } }, t('app.title')),
+                h('span', { style: { color: accent, fontWeight: 500 } }, phaseText(state.phase)),
               ),
-              h('div', { style: S.hint }, '绑定会话 ' + String(state.sessionId || '').slice(0, 18) + '…'),
+              h('div', { style: S.hint }, t('session.bound', { id: String(state.sessionId || '').slice(0, 18) })),
               state.error ? h('div', { style: { color: TOKENS.danger } }, state.error) : null,
               h(
                 'div',
@@ -1199,18 +1342,18 @@ window.__ModuleLoader__.load({
                               fontWeight: 600,
                             },
                           },
-                          line.role === 'user' ? '你：' : '助手：',
+                          line.role === 'user' ? t('role.user') : t('role.assistant'),
                         ),
                         line.text,
                       ),
                     )
-                  : h('div', { style: { color: TOKENS.muted } }, '说话后，转写和回答会显示在这里。'),
+                  : h('div', { style: { color: TOKENS.muted } }, t('lines.empty')),
               ),
               state.voice || state.voices.length
                 ? h(
                     'div',
                     { style: S.row },
-                    h('span', { style: { ...S.label, flex: '0 0 auto' } }, '音色'),
+                    h('span', { style: { ...S.label, flex: '0 0 auto' } }, t('voice')),
                     h(
                       'select',
                       {
@@ -1219,7 +1362,13 @@ window.__ModuleLoader__.load({
                         style: { ...S.input, flex: 1 },
                       },
                       state.voices.map((voice) =>
-                        h('option', { key: voice.id, value: voice.id }, `${voice.label}（${voice.desc}）`),
+                        h(
+                          'option',
+                          { key: voice.id, value: voice.id },
+                          state.lang === 'en'
+                            ? `${voice.id} — ${voice.descEn || voice.desc}`
+                            : `${voice.label}（${voice.desc}）`,
+                        ),
                       ),
                     ),
                   )
@@ -1227,7 +1376,7 @@ window.__ModuleLoader__.load({
               h(
                 'label',
                 { style: S.label },
-                '语速',
+                t('rate'),
                 h('input', {
                   type: 'range',
                   min: 0.7,
@@ -1242,7 +1391,7 @@ window.__ModuleLoader__.load({
               h(
                 'label',
                 { style: { ...S.label, justifyContent: 'space-between', cursor: 'pointer' } },
-                h('span', null, '朗读清洗（跳过表格/代码）'),
+                h('span', null, t('clean')),
                 h('input', {
                   type: 'checkbox',
                   checked: state.cleanSpeech !== false,
@@ -1253,7 +1402,7 @@ window.__ModuleLoader__.load({
               h(
                 'div',
                 { style: S.row },
-                h('span', { style: S.label }, '麦克风 ' + Math.round((state.level || 0) * 100) + '%'),
+                h('span', { style: S.label }, t('mic', { n: Math.round((state.level || 0) * 100) })),
                 h(
                   'div',
                   { style: S.meter },
@@ -1268,9 +1417,9 @@ window.__ModuleLoader__.load({
                 h(
                   'button',
                   { type: 'button', style: S.btn, onClick: () => forceStopRecording?.() },
-                  '说完',
+                  t('send'),
                 ),
-                h('button', { type: 'button', style: S.btn, onClick: stopSpeaking }, '打断'),
+                h('button', { type: 'button', style: S.btn, onClick: stopSpeaking }, t('interrupt')),
               ),
               h(
                 'div',
@@ -1279,8 +1428,9 @@ window.__ModuleLoader__.load({
                   type: 'password',
                   value: key,
                   placeholder: state.configured
-                    ? `已配置 ${state.keyMasked}，输入新 Key 可替换`
-                    : '阿里云 API Key（sk-...）',
+                    ? t('key.configured', { mask: state.keyMasked })
+                    : t('key.placeholder'),
+                  title: t('key.hint'),
                   onChange: (event) => setKey(event.target.value),
                   style: { ...S.input, flex: 1 },
                 }),
@@ -1292,18 +1442,38 @@ window.__ModuleLoader__.load({
                     disabled: busy,
                     onClick: save,
                   },
-                  busy ? '测试中…' : '保存',
+                  busy ? t('key.testing') : t('save'),
                 ),
               ),
               state.usage
                 ? h(
                     'div',
                     { style: S.hint },
-                    `本月 ${state.usage.chars || 0} 字符 ≈ ¥${(((state.usage.chars || 0) / 10000) * 0.8).toFixed(2)}`,
+                    t('usage', { n: state.usage.chars || 0, cost: (((state.usage.chars || 0) / 10000) * 0.8).toFixed(2) }),
                   )
                 : null,
             )
           : null,
+      );
+    }
+
+    function langButton(state, accent, value, label) {
+      const active = state.lang === value;
+      return h(
+        'button',
+        {
+          key: value,
+          type: 'button',
+          onClick: () => setLang(value),
+          style: {
+            ...S.btn,
+            flex: '0 0 auto',
+            ...(active
+              ? { borderColor: accent, color: accent, background: rgba(accent, 0.08) }
+              : { color: TOKENS.muted }),
+          },
+        },
+        label,
       );
     }
 
@@ -1312,7 +1482,7 @@ window.__ModuleLoader__.load({
       return h(
         'div',
         { style: { ...S.row, flexWrap: 'wrap', gap: 6 } },
-        h('span', { style: { ...S.label, flex: '0 0 auto' } }, '按钮颜色'),
+        h('span', { style: { ...S.label, flex: '0 0 auto' } }, t('color')),
         ACCENTS.map((color) =>
           h('button', {
             key: color,
@@ -1334,7 +1504,7 @@ window.__ModuleLoader__.load({
         h('input', {
           type: 'color',
           value: accent,
-          title: '自定义颜色',
+          title: t('color.custom'),
           onChange: (event) => props.onChange(event.target.value),
           style: {
             width: 26,
@@ -1379,20 +1549,27 @@ window.__ModuleLoader__.load({
           h(
             'div',
             { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
-            h('strong', { style: { fontSize: 13 } }, '语音通话'),
-            h('span', { style: { color: accent, fontWeight: 500 } }, '准备'),
+            h('strong', { style: { fontSize: 13 } }, t('app.title')),
+            h('span', { style: { color: accent, fontWeight: 500 } }, t('app.setup')),
           ),
           h(
             'div',
             { style: S.hint },
-            sessionId ? '将在当前会话开始：' + String(sessionId).slice(0, 18) + '…' : '还没打开会话，先打开一个会话',
+            sessionId ? t('prep.session', { id: String(sessionId).slice(0, 18) }) : t('prep.noSession'),
+          ),
+          h(
+            'div',
+            { style: S.row },
+            h('span', { style: { ...S.label, flex: '0 0 auto' } }, t('lang')),
+            langButton(state, accent, 'zh', '中文'),
+            langButton(state, accent, 'en', 'English'),
           ),
           state.error ? h('div', { style: { color: TOKENS.danger } }, state.error) : null,
           state.voices.length
             ? h(
                 'div',
                 { style: S.row },
-                h('span', { style: { ...S.label, flex: '0 0 auto' } }, '音色'),
+                h('span', { style: { ...S.label, flex: '0 0 auto' } }, t('voice')),
                 h(
                   'select',
                   {
@@ -1401,7 +1578,13 @@ window.__ModuleLoader__.load({
                     style: { ...S.input, flex: 1 },
                   },
                   state.voices.map((voice) =>
-                    h('option', { key: voice.id, value: voice.id }, `${voice.label}（${voice.desc}）`),
+                    h(
+                      'option',
+                      { key: voice.id, value: voice.id },
+                      state.lang === 'en'
+                        ? `${voice.id} — ${voice.descEn || voice.desc}`
+                        : `${voice.label}（${voice.desc}）`,
+                    ),
                   ),
                 ),
               )
@@ -1409,7 +1592,7 @@ window.__ModuleLoader__.load({
           h(
             'label',
             { style: S.label },
-            '语速',
+            t('rate'),
             h('input', {
               type: 'range',
               min: 0.7,
@@ -1424,7 +1607,7 @@ window.__ModuleLoader__.load({
           h(
             'label',
             { style: { ...S.label, justifyContent: 'space-between', cursor: 'pointer' } },
-            h('span', null, '朗读清洗（跳过表格/代码）'),
+            h('span', null, t('clean')),
             h('input', {
               type: 'checkbox',
               checked: state.cleanSpeech !== false,
@@ -1440,8 +1623,9 @@ window.__ModuleLoader__.load({
               type: 'password',
               value: key,
               placeholder: state.configured
-                ? `已配置 ${state.keyMasked}，输入新 Key 可替换`
-                : '阿里云 API Key（sk-...）',
+                ? t('key.configured', { mask: state.keyMasked })
+                : t('key.placeholder'),
+              title: t('key.hint'),
               onChange: (event) => setKey(event.target.value),
               style: { ...S.input, flex: 1 },
             }),
@@ -1453,13 +1637,13 @@ window.__ModuleLoader__.load({
                 disabled: busy,
                 onClick: save,
               },
-              busy ? '测试中…' : '保存',
+              busy ? t('key.testing') : t('save'),
             ),
           ),
           h(
             'div',
             { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 2 } },
-            h('button', { type: 'button', style: S.btn, onClick: closePrep }, '取消'),
+            h('button', { type: 'button', style: S.btn, onClick: closePrep }, t('cancel')),
             h(
               'button',
               {
@@ -1468,13 +1652,13 @@ window.__ModuleLoader__.load({
                 onClick: () => {
                   const id = currentSessionId();
                   if (!id) {
-                    set({ error: '先打开一个会话' });
+                    set({ error: t('notice.noSession') });
                     return;
                   }
                   startCall(id);
                 },
               },
-              '开始通话',
+              t('start'),
             ),
           ),
         ),
@@ -1507,22 +1691,22 @@ window.__ModuleLoader__.load({
               borderColor: accent,
               boxShadow: '0 8px 20px ' + rgba(accent, 0.35),
             },
-            title: '打开语音通话设置',
+            title: t('launcher.title'),
             onClick: () => {
               const api = sessionApi();
               if (!api?.sessions?.retain || !api?.uiSession) {
-                setNotice('会话服务未就绪');
+                setNotice(t('notice.noService'));
                 return;
               }
               if (!currentSessionId()) {
-                setNotice('先打开一个会话');
+                setNotice(t('notice.noSession'));
                 return;
               }
               openPrep();
             },
           },
           h('span', { 'aria-hidden': true }, '🎙'),
-          '通话',
+          t('launcher.label'),
         ),
       );
     }

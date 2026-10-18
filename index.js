@@ -43,19 +43,19 @@ const DATA_DIR = process.env.DSH_HOME || join(homedir(), '.dsh');
 const SETTINGS_FILE = join(DATA_DIR, 'voice-call.json');
 
 const VOICES = [
-  ['Cherry', '芊悦', '阳光亲切的女声'],
-  ['Serena', '苏瑶', '温柔女声'],
-  ['Ethan', '晨煦', '温暖男声'],
-  ['Chelsie', '千雪', '二次元女声'],
-  ['Momo', '茉兔', '俏皮女声'],
-  ['Vivian', '十三', '可爱小暴躁'],
-  ['Moon', '月白', '率性男声'],
-  ['Maia', '四月', '知性温柔'],
-  ['Kai', '凯', '低沉男声'],
-  ['Nofish', '不吃鱼', '设计师男声'],
-  ['Bella', '萌宝', '萝莉音'],
-  ['Jennifer', '詹妮弗', '电影质感女声'],
-].map(([id, label, desc]) => ({ id, label, desc }));
+  ['Cherry', '芊悦', '阳光亲切的女声', 'Sunny, friendly female'],
+  ['Serena', '苏瑶', '温柔女声', 'Gentle female'],
+  ['Ethan', '晨煦', '温暖男声', 'Warm male'],
+  ['Chelsie', '千雪', '二次元女声', 'Anime-style female'],
+  ['Momo', '茉兔', '俏皮女声', 'Playful female'],
+  ['Vivian', '十三', '可爱小暴躁', 'Feisty, cute female'],
+  ['Moon', '月白', '率性男声', 'Casual male'],
+  ['Maia', '四月', '知性温柔', 'Calm, thoughtful female'],
+  ['Kai', '凯', '低沉男声', 'Deep male'],
+  ['Nofish', '不吃鱼', '设计师男声', 'Designer male'],
+  ['Bella', '萌宝', '萝莉音', 'Childlike female'],
+  ['Jennifer', '詹妮弗', '电影质感女声', 'Cinematic female'],
+].map(([id, label, desc, descEn]) => ({ id, label, desc, descEn }));
 
 function monthKey() {
   const now = new Date();

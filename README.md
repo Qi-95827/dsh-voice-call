@@ -21,12 +21,28 @@ The floating widget renders into the `shell.overlay` slot, so it stays above
 every panel and survives switching sessions. A call is bound to the session that
 was active when it started; switching sessions does not move the binding.
 
+## Screenshots
+
+The call button sits at the bottom right. It opens the setup panel first, so no
+microphone is touched until you press **Start call**:
+
+![Launcher](docs/shots/launcher.png)
+
+| Setup | In call |
+| --- | --- |
+| ![Setup panel](docs/shots/prep-panel-en.png) | ![Active call](docs/shots/call-card-en.png) |
+
+The widget follows the language chosen in the setup panel (中文 / English), and
+the button colour picked there applies to the whole call UI. Screenshots are
+rendered from the plugin's own components with demo content.
+
 ## Usage
 
 1. Click **🎙 通话** at the bottom right. It opens a **pre-call panel** instead of
    starting immediately.
-2. Choose voice, rate, speech cleaning and button colour there; paste the API key
-   on the same panel when none is configured yet.
+2. Choose the interface language (中文 / English), voice, rate, speech cleaning
+   and button colour there; paste the API key on the same panel when none is
+   configured yet.
 3. Press **开始通话**. The panel becomes the call card, the microphone opens, and
    what you say arrives as a normal user message.
 4. **暂停** stops listening and playback; **打断** stops only the current reading;
@@ -114,11 +130,11 @@ Open the call widget and paste an Alibaba Cloud DashScope API key (`sk-…`).
 - `DASHSCOPE_API_KEY` in the environment works as a last resort.
 
 Non-secret preferences (voice, rate, monthly character count) live in
-`~/.dsh/voice-call.json`. The "朗读清洗" switch and the button colour are per
-browser and stored in `localStorage`; the colour defaults to DeepSeek blue
-(`#4D6BFE`), is picked from swatches or any custom value, and is offered only in
-the pre-call panel — the in-call card does not show it, so it cannot be changed
-by accident mid-call.
+`~/.dsh/voice-call.json`. The interface language, the "朗读清洗" switch and the
+button colour are per browser and stored in `localStorage`; the colour defaults
+to DeepSeek blue (`#4D6BFE`), is picked from swatches or any custom value, and is
+offered only in the pre-call panel — the in-call card does not show it, so it
+cannot be changed by accident mid-call.
 
 ## Behaviour notes
 
@@ -139,6 +155,10 @@ by accident mid-call.
   Markdown markers, links, and bare URLs are stripped for speech only — the
   conversation still shows the original text.
 - **Pause** stops listening and playback without ending the call.
+- **The widget speaks Chinese or English.** The switch lives in the setup panel
+  and is applied to every label, phase and control; it is stored per browser.
+  Errors returned by the Host or by DashScope stay in the language that produced
+  them.
 - `GET /voice-call/diagnostics` returns the plugin's apply count and the last 40
   speech requests (arrival time, audio bytes, client instance tag, characters).
   It is the fastest way to prove whether one or several client instances are
