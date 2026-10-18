@@ -1366,7 +1366,9 @@ window.__ModuleLoader__.load({
                           'option',
                           { key: voice.id, value: voice.id },
                           state.lang === 'en'
-                            ? `${voice.id} — ${voice.descEn || voice.desc}`
+                            ? voice.descEn
+                              ? `${voice.id} — ${voice.descEn}`
+                              : voice.id
                             : `${voice.label}（${voice.desc}）`,
                         ),
                       ),
@@ -1582,7 +1584,9 @@ window.__ModuleLoader__.load({
                       'option',
                       { key: voice.id, value: voice.id },
                       state.lang === 'en'
-                        ? `${voice.id} — ${voice.descEn || voice.desc}`
+                        ? voice.descEn
+                          ? `${voice.id} — ${voice.descEn}`
+                          : voice.id
                         : `${voice.label}（${voice.desc}）`,
                     ),
                   ),
