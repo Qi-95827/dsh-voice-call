@@ -193,6 +193,13 @@ await sleep(20);
 const beforeEnd = ttsTexts().length;
 if (beforeEnd < 2) throw new Error(`second sentence not spoken while streaming: ${JSON.stringify(ttsTexts())}`);
 
+// The card shows the reply while it streams, not only after turn/end.
+await sleep(150);
+const streamingCard = JSON.stringify(render(regs1[0].component()));
+if (!streamingCard.includes('第二句话')) {
+  throw new Error('the streaming reply is not shown in the widget transcript');
+}
+
 push({ type: 'turn/end', data: {} });
 await sleep(20);
 const afterEnd = ttsTexts();

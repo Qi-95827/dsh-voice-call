@@ -161,6 +161,9 @@ not show it, so it cannot be changed by accident mid-call.
 - **One slow sentence cannot silence the reply.** Each synthesis attempt gives up
   after 12 s and is retried once; if a sentence still cannot be synthesized it is
   skipped with a short notice in the card, while the rest keeps playing.
+- **The card shows the reply while it streams.** The transcript is updated as the
+  answer is generated and read, instead of appearing only at `turn/end`, and it
+  scrolls to the newest sentence.
 - **One engine per page.** A live instance owns the microphone and the widget
   through `window.__dshVoiceCallOwner`; a second one (hot reload, or a stale
   copy left by an earlier manual install) disposes the first before mounting,

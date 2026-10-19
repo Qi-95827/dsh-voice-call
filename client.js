@@ -281,6 +281,53 @@ window.__ModuleLoader__.load({
       set({ lines: [...call.lines, { role, text, at: Date.now() }].slice(-24) });
     }
 
+    // The reply is written into the transcript while it streams, not only when
+    // the turn ends; otherwise the card looks empty while it is being read.
+    let liveLine = false;
+    let liveLineTimer = null;
+    let liveLinePending = '';
+
+    function updateLiveLine(text) {
+      const lines = call.lines.slice();
+      const last = lines[lines.length - 1];
+      const line = { role: 'assistant', text, at: Date.now() };
+      if (liveLine && last && last.role === 'assistant') lines[lines.length - 1] = line;
+      else {
+        lines.push(line);
+        liveLine = true;
+      }
+      set({ lines: lines.slice(-24) });
+    }
+
+    function scheduleLiveLine(text) {
+      liveLinePending = text;
+      if (liveLineTimer) return;
+      liveLineTimer = setTimeout(() => {
+        liveLineTimer = null;
+        const next = liveLinePending;
+        liveLinePending = '';
+        if (next) updateLiveLine(next);
+      }, 80);
+    }
+
+    function finishLiveLine(text) {
+      if (liveLineTimer) {
+        clearTimeout(liveLineTimer);
+        liveLineTimer = null;
+      }
+      liveLinePending = '';
+      if (!liveLine) return false;
+      liveLine = false;
+      if (!text) return true;
+      const lines = call.lines.slice();
+      const last = lines[lines.length - 1];
+      if (last && last.role === 'assistant') {
+        lines[lines.length - 1] = { role: 'assistant', text, at: Date.now() };
+        set({ lines: lines.slice(-24) });
+      }
+      return true;
+    }
+
     let pluginCtx = null;
     let sessionCtx = null;
     let binding = null;
@@ -821,6 +868,7 @@ window.__ModuleLoader__.load({
           if (text) {
             assistantGotText = true;
             assistantFullText += text;
+            scheduleLiveLine(assistantFullText);
             set({ phase: 'speaking' });
             if (!suppressTurnSpeech) flushSpeech(false);
           }
@@ -830,6 +878,7 @@ window.__ModuleLoader__.load({
         if (text) {
           assistantGotText = true;
           assistantFullText += text;
+          scheduleLiveLine(assistantFullText);
           set({ phase: 'speaking' });
           if (!suppressTurnSpeech) flushSpeech(false);
         }
@@ -857,7 +906,8 @@ window.__ModuleLoader__.load({
         const spoke = spokeThisTurn;
         pendingSpeech = '';
         resetSpeechStream();
-        if (full) appendLine('assistant', full);
+        const replaced = finishLiveLine(full);
+        if (full && !replaced) appendLine('assistant', full);
         if (!full || !speak || !spoke) {
           turnDone = false;
           set({ phase: 'listening' });
@@ -1177,6 +1227,7 @@ window.__ModuleLoader__.load({
         // A real utterance replaced the suspended reading: drop the rest of it.
         resumeAfterSilence = false;
         if (speechSuspended) dropSuspendedSpeech();
+        finishLiveLine('');
         appendLine('user', text);
         resetSpeechStream();
         turnDone = false;
@@ -1682,12 +1733,19 @@ window.__ModuleLoader__.load({
       const [now, setNow] = useState(Date.now());
       const [key, setKey] = useState('');
       const [busy, setBusy] = useState(false);
+      const linesRef = useRef(null);
 
       useEffect(() => {
         if (!state.active) return undefined;
         const timer = setInterval(() => setNow(Date.now()), 1000);
         return () => clearInterval(timer);
       }, [state.active]);
+
+      // Keep the newest sentence visible while the reply streams.
+      useEffect(() => {
+        const node = linesRef.current;
+        if (node) node.scrollTop = node.scrollHeight;
+      }, [state.lines]);
 
       if (!state.active) return null;
 
@@ -1738,7 +1796,7 @@ window.__ModuleLoader__.load({
               state.error ? h('div', { style: { color: TOKENS.danger } }, state.error) : null,
               h(
                 'div',
-                { style: S.lines },
+                { ref: linesRef, style: S.lines },
                 state.lines.length
                   ? state.lines.map((line, index) =>
                       h(
