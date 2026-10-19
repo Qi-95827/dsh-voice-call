@@ -158,6 +158,9 @@ not show it, so it cannot be changed by accident mid-call.
   reply. The remaining delay is the DashScope round trip and synthesis time.
 - **Reasoning is never read.** `reasoning-delta` chunks and `reasoning` /
   `thinking` blocks are filtered out before speech.
+- **One slow sentence cannot silence the reply.** Each synthesis attempt gives up
+  after 12 s and is retried once; if a sentence still cannot be synthesized it is
+  skipped with a short notice in the card, while the rest keeps playing.
 - **One engine per page.** A live instance owns the microphone and the widget
   through `window.__dshVoiceCallOwner`; a second one (hot reload, or a stale
   copy left by an earlier manual install) disposes the first before mounting,

@@ -40,6 +40,9 @@ window.__ModuleLoader__.load({
     const IDLE_MS = 10000;
     const FIRST_CHUNK = 90;
     const SPEECH_TAIL_MS = 600;
+    // A single synthesis attempt gives up after this; the next chunk still
+    // plays, so one slow upstream call cannot silence the whole reply.
+    const TTS_TIMEOUT_MS = 12000;
     // Voice barge-in: ignore the first moments of playback, then require a
     // sustained voice before stopping the reading.
     const BARGE_GRACE_MS = 400;
@@ -86,6 +89,7 @@ window.__ModuleLoader__.load({
         'bargeIn': '语音打断（我说话就停止朗读）',
         'settings': '配置',
         'settings.hide': '收起配置',
+        'error.ttsSkip': '有 {n} 段没读出来，已跳过',
         'color': '按钮颜色',
         'color.custom': '自定义颜色',
         'key.configured': '已配置 {mask}',
@@ -147,6 +151,7 @@ window.__ModuleLoader__.load({
         'bargeIn': 'Stop reading when I speak',
         'settings': 'Settings',
         'settings.hide': 'Hide settings',
+        'error.ttsSkip': '{n} part(s) could not be spoken, skipped',
         'color': 'Button colour',
         'color.custom': 'Custom colour',
         'key.configured': 'Key set: {mask}',
@@ -545,16 +550,54 @@ window.__ModuleLoader__.load({
       pumpSpeech();
     }
 
-    async function fetchSpeech(text, signal) {
-      const response = await fetch(
-        '/voice-call/tts?text=' + encodeURIComponent(text) + '&voice=' + encodeURIComponent(call.voice),
-        { signal },
-      );
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.error || 'HTTP ' + response.status);
+    /**
+     * One synthesis attempt with its own deadline. The outer signal is the
+     * "this reply was replaced" switch: it must abort immediately, while a slow
+     * upstream must only fail this attempt and be retried.
+     */
+    function fetchSpeechOnce(url, outer) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), TTS_TIMEOUT_MS);
+      const relay = () => controller.abort();
+      if (outer) outer.addEventListener('abort', relay, { once: true });
+      return fetch(url, { signal: controller.signal }).finally(() => {
+        clearTimeout(timer);
+        if (outer) outer.removeEventListener('abort', relay);
+      });
+    }
+
+    async function fetchSpeech(text, outer) {
+      const url =
+        '/voice-call/tts?text=' + encodeURIComponent(text) + '&voice=' + encodeURIComponent(call.voice);
+      let lastError = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        if (outer?.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+        try {
+          const response = await fetchSpeechOnce(url, outer);
+          if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            throw new Error(body.error || 'HTTP ' + response.status);
+          }
+          return await response.blob();
+        } catch (err) {
+          if (outer?.aborted) throw err;
+          lastError = err;
+        }
       }
-      return await response.blob();
+      throw lastError || new Error('speech synthesis failed');
+    }
+
+    /**
+     * Prefetch without ever rejecting: a failed chunk resolves to `{ error }`
+     * so the pump can skip it instead of dropping the rest of the reply.
+     */
+    function prefetchSpeech(entry) {
+      if (!entry.promise) {
+        entry.promise = fetchSpeech(entry.text, speechAbort.signal)
+          .then((blob) => ({ blob }))
+          .catch((error) => ({ error }));
+      }
+      return entry.promise;
     }
 
     /* ------------------------------------------------------------------ *
@@ -663,6 +706,11 @@ window.__ModuleLoader__.load({
       const epoch = speechEpoch;
       if (!call.bargeIn) releaseMic();
       else startBargeWatch();
+      let skipped = 0;
+      const skip = (reason) => {
+        skipped += 1;
+        set({ error: t('error.ttsSkip', { n: skipped, message: reason }) });
+      };
       try {
         while (speechQueue.length && epoch === speechEpoch && call.active && !call.paused) {
           if (speechSuspended) break;
@@ -670,14 +718,25 @@ window.__ModuleLoader__.load({
           // suspension during the fetch does not lose a chunk.
           const item = speechQueue[0];
           const next = speechQueue[1];
-          if (next && !next.promise) next.promise = fetchSpeech(next.text, speechAbort.signal);
-          const blob = await (item.promise || fetchSpeech(item.text, speechAbort.signal));
+          if (next) prefetchSpeech(next);
+          const result = await prefetchSpeech(item);
           if (epoch !== speechEpoch || !call.active || call.paused || speechSuspended) break;
+          if (result.error) {
+            // A replaced reply aborts on purpose; anything else only costs
+            // this sentence.
+            if (speechAbort.signal.aborted) break;
+            speechQueue.shift();
+            skip(result.error?.message || String(result.error));
+            continue;
+          }
           speechQueue.shift();
-          await playBlob(blob);
+          try {
+            await playBlob(result.blob);
+          } catch (err) {
+            if (epoch !== speechEpoch || !call.active || call.paused) break;
+            skip(err?.message || String(err));
+          }
         }
-      } catch (err) {
-        if (err?.name !== 'AbortError') set({ error: t('error.tts', { message: err?.message || err }) });
       } finally {
         speechPumpRunning = false;
         stopBargeWatch();

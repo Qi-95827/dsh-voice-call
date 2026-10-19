@@ -208,7 +208,7 @@ async function synthesize(text, voice, key) {
         model: MODEL,
         input: { text: clean.slice(0, 600), voice, language_type: 'Auto' },
       }),
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(15000),
     });
   } catch (err) {
     throw new Error(`连接阿里云失败：${err.message}`);
@@ -230,7 +230,7 @@ async function synthesize(text, voice, key) {
     return { buffer: Buffer.from(audio.data, 'base64'), contentType: 'audio/wav' };
   }
   if (audio?.url) {
-    const file = await fetch(audio.url, { signal: AbortSignal.timeout(60000) });
+    const file = await fetch(audio.url, { signal: AbortSignal.timeout(15000) });
     if (!file.ok) throw new Error(`下载云端音频失败：HTTP ${file.status}`);
     return {
       buffer: Buffer.from(await file.arrayBuffer()),

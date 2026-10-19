@@ -22,6 +22,7 @@ const sleep = (ms = 5) => new Promise((resolve) => setTimeout(resolve, ms));
 /* ---------------------------------------------------------------- stubs */
 
 const calls = [];
+const failingTexts = new Set();
 globalThis.fetch = async (url, init) => {
   const target = String(url);
   calls.push({ url: target, body: init?.body ? JSON.parse(init.body) : null });
@@ -36,6 +37,10 @@ globalThis.fetch = async (url, init) => {
     return { ok: true, status: 200, json: async () => ({ text: '你好' }) };
   }
   if (target.includes('/voice-call/tts')) {
+    const text = new URL(target, 'http://x').searchParams.get('text') || '';
+    if ([...failingTexts].some((needle) => text.includes(needle))) {
+      return { ok: false, status: 502, json: async () => ({ error: 'bad gateway' }) };
+    }
     return { ok: true, status: 200, blob: async () => new Blob(['audio']) };
   }
   return { ok: false, status: 404, json: async () => ({}) };
@@ -199,6 +204,23 @@ if (afterEnd.length !== beforeEnd) {
 const card = render(regs1[0].component());
 const flat = JSON.stringify(card);
 if (!flat.includes('第一句话。第二句话。')) throw new Error('assistant line missing from the widget transcript');
+
+/* ------------------------------------------- a failed chunk does not stop */
+
+failingTexts.add('这一句会失败');
+push({ type: 'assistant/live-chunk', data: { chunk: { type: 'text-delta', index: 0, text: '这一句会失败。' } } });
+await sleep(30);
+push({ type: 'assistant/live-chunk', data: { chunk: { type: 'text-delta', index: 0, text: '这一句必须还在。' } } });
+await sleep(120);
+
+const afterFailure = ttsTexts();
+const failedCalls = afterFailure.filter((text) => text && text.includes('这一句会失败')).length;
+if (failedCalls !== 2) throw new Error(`expected one retry for the failed chunk, saw ${failedCalls} calls`);
+if (!afterFailure.some((text) => text && text.includes('这一句必须还在'))) {
+  throw new Error(`a failed chunk silenced the rest of the reply: ${JSON.stringify(afterFailure)}`);
+}
+const afterFailureCard = JSON.stringify(render(regs1[0].component()));
+if (!afterFailureCard.includes('没读出来')) throw new Error('the widget did not report the skipped chunk');
 
 /* ------------------------------------------------------- second instance */
 
