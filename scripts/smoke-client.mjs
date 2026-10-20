@@ -163,25 +163,53 @@ const prepOpen = render(component());
 if (!JSON.stringify(prepOpen).includes('按钮颜色')) throw new Error('settings did not open');
 if (!JSON.stringify(prepOpen).includes('收起配置')) throw new Error('settings button did not switch label');
 
-// The three numeric settings are typed fields with generous bounds, and a
-// committed value reaches the state.
-function commitNumber(label, value) {
-  const field = findToggle(render(component()), label);
-  if (!field) throw new Error(`${label} field missing`);
-  if (field.props.type !== 'number') throw new Error(`${label} should be a number input`);
-  field.props.onChange({ target: { value: String(value) } });
-  field.props.onBlur({ target: { value: String(value) } });
-  return findToggle(render(component()), label);
+// Each numeric setting is a slider whose ceiling comes from a typed field.
+function findRow(tree, text) {
+  return walk(
+    tree,
+    (node) =>
+      node.type === 'div' &&
+      [].concat(node.props?.children ?? []).some(
+        (child) => child && child.type === 'label' && JSON.stringify(child.props?.children ?? '').includes(text),
+      ),
+  )[0];
 }
 
-const silenceField = findToggle(prepOpen, '停顿多久算说完');
-if (!silenceField) throw new Error('silence field missing');
-if (silenceField.props.min !== 0.5 || silenceField.props.max !== 30) {
-  throw new Error(`unexpected silence range: ${silenceField.props.min}-${silenceField.props.max}`);
+function rowParts(label) {
+  const row = findRow(render(component()), label);
+  if (!row) throw new Error(`${label} row missing`);
+  const inputs = walk(row, (node) => node.type === 'input');
+  return {
+    slider: inputs.find((node) => node.props.type === 'range'),
+    cap: inputs.find((node) => node.props.type === 'number'),
+  };
 }
-if (commitNumber('停顿多久算说完', 5).props.value !== '5') throw new Error('silence value was not applied');
-if (commitNumber('语速', 1.4).props.value !== '1.4') throw new Error('rate value was not applied');
-if (commitNumber('单次最长录音', 300).props.value !== '300') throw new Error('max recording value was not applied');
+
+function commitCap(label, value) {
+  const { cap } = rowParts(label);
+  if (!cap) throw new Error(`${label} ceiling field missing`);
+  cap.props.onChange({ target: { value: String(value) } });
+  cap.props.onBlur({ target: { value: String(value) } });
+  return rowParts(label);
+}
+
+let parts = rowParts('停顿多久算说完');
+if (!parts.slider || parts.slider.props.max !== 10) {
+  throw new Error(`silence slider should span the 10s ceiling, got ${parts.slider?.props.max}`);
+}
+parts = commitCap('停顿多久算说完', 6);
+if (parts.slider.props.max !== 6) throw new Error(`ceiling change did not resize the slider: ${parts.slider.props.max}`);
+
+parts = rowParts('语速');
+if (!parts.slider || parts.slider.props.max !== 2) throw new Error(`rate slider ceiling is ${parts.slider?.props.max}`);
+parts = commitCap('语速', 1.5);
+if (parts.slider.props.max !== 1.5) throw new Error('rate ceiling change did not resize the slider');
+if (Number(parts.slider.props.value) > 1.5) throw new Error('rate value was not pulled under the new ceiling');
+
+parts = rowParts('单次最长录音');
+if (!parts.slider || parts.slider.props.max !== 600) throw new Error(`recording ceiling is ${parts.slider?.props.max}`);
+parts = commitCap('单次最长录音', 300);
+if (parts.slider.props.max !== 300) throw new Error('recording ceiling change did not resize the slider');
 
 // Voice barge-in exists, defaults to off, and can be turned on.
 const bargeToggle = findToggle(prepOpen, '语音打断');

@@ -35,15 +35,19 @@ window.__ModuleLoader__.load({
 
     const FONT = "12px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif";
     const MIC_THRESHOLD = 0.009;
-    // Defaults only: the setup panel accepts any value inside these bounds.
+    // Each setting has a value (the slider) and a ceiling (a typed field that
+    // becomes the slider's max). The *_MAX constants only bound the ceiling.
     const SILENCE_MS = 2600;
     const SILENCE_MIN = 500;
-    const SILENCE_MAX = 30000;
+    const SILENCE_MAX = 60000;
+    const SILENCE_CAP = 10000;
     const MAX_RECORD_MS = 120000;
     const MAX_RECORD_MIN = 10000;
-    const MAX_RECORD_MAX = 900000;
+    const MAX_RECORD_MAX = 3600000;
+    const MAX_RECORD_CAP = 600000;
     const RATE_MIN = 0.5;
-    const RATE_MAX = 3;
+    const RATE_MAX = 5;
+    const RATE_CAP = 2;
     const IDLE_MS = 10000;
     const FIRST_CHUNK = 90;
     const SPEECH_TAIL_MS = 600;
@@ -97,7 +101,9 @@ window.__ModuleLoader__.load({
         'silence': '停顿多久算说完',
         'silence.hint': '说完后静音多久就把这句话发出去；说长句时调大',
         'maxRecord': '单次最长录音',
-        'maxRecord.hint': '一次最多录多久，到时间就自动结束并发送（10–900 秒）',
+        'maxRecord.hint': '一次最多录多久，到时间就自动结束并发送',
+        'cap': '上限',
+        'cap.hint': '这一行的横条最多能拉到多少；改小会把当前值一起压下来',
         'input.clamp': '已按允许范围调整：{min}–{max}',
         'settings': '配置',
         'settings.hide': '收起配置',
@@ -164,7 +170,9 @@ window.__ModuleLoader__.load({
         'silence': 'Pause before sending',
         'silence.hint': 'How long a silence ends a sentence; raise it for long dictation',
         'maxRecord': 'Max recording',
-        'maxRecord.hint': 'Hard limit for one utterance; it ends and sends when reached (10–900 s)',
+        'maxRecord.hint': 'Hard limit for one utterance; it ends and sends when reached',
+        'cap': 'Max',
+        'cap.hint': "The slider's ceiling; lowering it pulls the current value down too",
         'input.clamp': 'Adjusted to the allowed range: {min}–{max}',
         'settings': 'Settings',
         'settings.hide': 'Hide settings',
@@ -288,6 +296,50 @@ window.__ModuleLoader__.load({
       if (!value) stopBargeWatch();
     }
 
+    function readStored(key, fallback, min, max) {
+      try {
+        const saved = Number(localStorage.getItem(key));
+        if (Number.isFinite(saved) && saved > 0) return Math.min(max, Math.max(min, saved));
+      } catch {}
+      return fallback;
+    }
+
+    const storedRateCap = readStored('dsh-voice-call-rate-cap', RATE_CAP, RATE_MIN + 0.1, RATE_MAX);
+    const storedSilenceCap = readStored('dsh-voice-call-silence-cap', SILENCE_CAP, SILENCE_MIN, SILENCE_MAX);
+    const storedRecordCap = readStored(
+      'dsh-voice-call-record-cap',
+      MAX_RECORD_CAP,
+      MAX_RECORD_MIN,
+      MAX_RECORD_MAX,
+    );
+
+    function setRateCap(value) {
+      const cap = Math.min(RATE_MAX, Math.max(RATE_MIN + 0.1, Number(value) || RATE_CAP));
+      set({ rateCap: cap });
+      try {
+        localStorage.setItem('dsh-voice-call-rate-cap', String(cap));
+      } catch {}
+      if (call.rate > cap) setRate(cap);
+    }
+
+    function setSilenceCap(value) {
+      const cap = Math.min(SILENCE_MAX, Math.max(SILENCE_MIN, Math.round(Number(value) || SILENCE_CAP)));
+      set({ silenceCap: cap });
+      try {
+        localStorage.setItem('dsh-voice-call-silence-cap', String(cap));
+      } catch {}
+      if (call.silence > cap) setSilence(cap);
+    }
+
+    function setRecordCap(value) {
+      const cap = Math.min(MAX_RECORD_MAX, Math.max(MAX_RECORD_MIN, Math.round(Number(value) || MAX_RECORD_CAP)));
+      set({ recordCap: cap });
+      try {
+        localStorage.setItem('dsh-voice-call-record-cap', String(cap));
+      } catch {}
+      if (call.maxRecord > cap) setMaxRecord(cap);
+    }
+
     const listeners = new Set();
     let call = {
       active: false,
@@ -313,6 +365,9 @@ window.__ModuleLoader__.load({
       bargeIn: storedBargeIn,
       silence: storedSilence,
       maxRecord: storedMaxRecord,
+      rateCap: storedRateCap,
+      silenceCap: storedSilenceCap,
+      recordCap: storedRecordCap,
     };
 
     function set(patch) {
@@ -1699,59 +1754,112 @@ window.__ModuleLoader__.load({
       });
     }
 
-    function rateRow(state, accent) {
+    /**
+     * A slider whose ceiling is itself editable: the typed ceiling becomes the
+     * slider's max, and the current value is clamped when that ceiling shrinks.
+     */
+    function rangeRow(props) {
+      const cap = Math.max(props.min, Math.min(props.absMax, props.cap));
+      const value = Math.max(props.min, Math.min(cap, props.value));
       return h(
-        'label',
-        { style: S.label },
-        t('rate'),
-        h('span', { style: { flex: 1 } }),
-        h(NumberField, {
-          value: Math.round(Number(state.rate) * 100) / 100,
-          min: RATE_MIN,
-          max: RATE_MAX,
-          step: 0.05,
-          onCommit: (value) => setRate(value),
-        }),
-        h('span', null, '×'),
+        'div',
+        { style: { display: 'flex', flexDirection: 'column', gap: 3 } },
+        h(
+          'label',
+          { style: S.label, title: props.title },
+          props.label,
+          h('input', {
+            type: 'range',
+            min: props.min,
+            max: cap,
+            step: props.step,
+            value,
+            onChange: (event) => props.onValue(Number(event.target.value)),
+            style: { flex: 1, accentColor: props.accent },
+          }),
+          h('span', { style: { width: 46, textAlign: 'right' } }, props.show(value)),
+        ),
+        h(
+          'div',
+          {
+            style: {
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: 6,
+              fontSize: 11,
+              color: TOKENS.muted,
+            },
+            title: t('cap.hint'),
+          },
+          t('cap'),
+          h(NumberField, {
+            value: props.capValue,
+            min: props.min,
+            max: props.absMax,
+            step: props.step,
+            title: t('cap.hint'),
+            onCommit: props.onCap,
+          }),
+          h('span', null, props.suffix),
+        ),
       );
+    }
+
+    function rateRow(state, accent) {
+      const cap = Number(state.rateCap) || RATE_CAP;
+      return rangeRow({
+        label: t('rate'),
+        accent,
+        value: Number(state.rate),
+        min: RATE_MIN,
+        cap,
+        capValue: cap,
+        absMax: RATE_MAX,
+        step: 0.05,
+        suffix: '×',
+        show: (v) => Number(v).toFixed(2) + '×',
+        onValue: (v) => setRate(v),
+        onCap: (v) => setRateCap(v),
+      });
     }
 
     function silenceRow(state, accent) {
-      const seconds = Math.round((Number(state.silence) || SILENCE_MS) / 100) / 10;
-      return h(
-        'label',
-        { style: S.label, title: t('silence.hint') },
-        t('silence'),
-        h('span', { style: { flex: 1 } }),
-        h(NumberField, {
-          value: seconds,
-          min: SILENCE_MIN / 1000,
-          max: SILENCE_MAX / 1000,
-          step: 0.1,
-          title: t('silence.hint'),
-          onCommit: (value) => setSilence(value * 1000),
-        }),
-        h('span', null, 's'),
-      );
+      const capMs = Number(state.silenceCap) || SILENCE_CAP;
+      return rangeRow({
+        label: t('silence'),
+        title: t('silence.hint'),
+        accent,
+        value: Math.round((Number(state.silence) || SILENCE_MS) / 100) / 10,
+        cap: capMs / 1000,
+        capValue: Math.round(capMs / 100) / 10,
+        min: SILENCE_MIN / 1000,
+        absMax: SILENCE_MAX / 1000,
+        step: 0.1,
+        suffix: 's',
+        show: (v) => Number(v).toFixed(1) + 's',
+        onValue: (v) => setSilence(v * 1000),
+        onCap: (v) => setSilenceCap(v * 1000),
+      });
     }
 
     function maxRecordRow(state, accent) {
-      const seconds = Math.round((Number(state.maxRecord) || MAX_RECORD_MS) / 1000);
-      return h(
-        'label',
-        { style: S.label, title: t('maxRecord.hint') },
-        t('maxRecord'),
-        h('span', { style: { flex: 1 } }),
-        h(NumberField, {
-          value: seconds,
-          min: MAX_RECORD_MIN / 1000,
-          max: MAX_RECORD_MAX / 1000,
-          step: 5,
-          title: t('maxRecord.hint'),
-          onCommit: (value) => setMaxRecord(value * 1000),
-        }),
-        h('span', null, 's'),
-      );
+      const capMs = Number(state.recordCap) || MAX_RECORD_CAP;
+      return rangeRow({
+        label: t('maxRecord'),
+        title: t('maxRecord.hint'),
+        accent,
+        value: Math.round((Number(state.maxRecord) || MAX_RECORD_MS) / 1000),
+        cap: capMs / 1000,
+        capValue: Math.round(capMs / 1000),
+        min: MAX_RECORD_MIN / 1000,
+        absMax: MAX_RECORD_MAX / 1000,
+        step: 5,
+        suffix: 's',
+        show: (v) => Math.round(Number(v)) + 's',
+        onValue: (v) => setMaxRecord(v * 1000),
+        onCap: (v) => setRecordCap(v * 1000),
+      });
     }
 
     function cleanRow(state, accent) {

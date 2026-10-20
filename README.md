@@ -145,9 +145,10 @@ cannot be changed by accident mid-call.
 
 - **A sentence ends after a silence you control.** The 停顿多久算说完 field sets
   how long a pause ends the utterance; **说完** still sends immediately.
-- **Three numbers are typed, not fixed.** Rate (0.5–3.0×), pause before sending
-  (0.5–30 s) and max recording (10–900 s) are number fields, with those values as
-  sanity bounds only; commit with Enter or by leaving the field.
+- **Each slider's ceiling is editable.** Rate, pause-before-send and max recording
+  show a slider plus a 上限 field: type a ceiling and the slider rescales to it
+  (0.5–5×, 0.5–60 s, 10 s–1 h); lowering the ceiling also pulls the current value
+  down. Findings commit on Enter or blur and persist per browser.
 - **“打断” stops the reading only.** It aborts the current speech fetches, clears
   the queue, and keeps the agent generating. Speaking again while the turn is
   still running sends that message with `steer`.
