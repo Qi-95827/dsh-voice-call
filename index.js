@@ -22,6 +22,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
+import { splitWav } from './wav.js';
+
 export const name = 'voice-call';
 
 /**
@@ -343,7 +345,7 @@ export function apply(ctx) {
             }
 
             if (req.method === 'POST' && sub === '/transcribe') {
-              const body = JSON.parse((await readBody(req, 16 * 1024 * 1024)) || '{}');
+              const body = JSON.parse((await readBody(req, 64 * 1024 * 1024)) || '{}');
               if (!body.audioBase64) throw new Error('empty audio');
               if (!speechController) {
                 const error = new Error(
@@ -355,17 +357,26 @@ export function apply(ctx) {
               if (typeof speechController.prepare === 'function') {
                 await speechController.prepare(SPEECH_PROVIDER);
               }
-              const transcript = await speechController.transcribe(
-                {
-                  audioBase64: body.audioBase64,
-                  providerId: SPEECH_PROVIDER,
-                  language: body.language || 'zh',
-                },
-                AbortSignal.timeout(120000),
-              );
-              const text = transcriptText(transcript).trim();
+              // The speech bundle rejects audio longer than its configured limit
+              // (120 s by default), so a long utterance is recognized in pieces.
+              const segments = splitWav(body.audioBase64) || [body.audioBase64];
+              const parts = [];
+              for (const audioBase64 of segments) {
+                const transcript = await speechController.transcribe(
+                  {
+                    audioBase64,
+                    providerId: SPEECH_PROVIDER,
+                    language: body.language || 'zh',
+                  },
+                  AbortSignal.timeout(120000),
+                );
+                const piece = transcriptText(transcript).trim();
+                if (piece) parts.push(piece);
+              }
+              const text = parts.join(' ').trim();
               trace(diagnostics.transcribes, {
                 bytes: body.audioBase64.length,
+                segments: segments.length,
                 instance: typeof body.instance === 'string' ? body.instance : '',
                 boots: Number(body.boots) || 0,
                 chars: text.length,

@@ -145,6 +145,10 @@ cannot be changed by accident mid-call.
 
 - **A sentence ends after a silence you control.** The 停顿多久算说完 field sets
   how long a pause ends the utterance; **说完** still sends immediately.
+- **Long dictation is recognized in pieces.** The speech provider refuses audio
+  over 120 s, so anything longer is split on the quietest frame near each 100 s
+  boundary (`wav.js`) and the pieces are transcribed and joined. The recording
+  limit goes up to 15 minutes.
 - **Each slider's ceiling is editable.** Rate, pause-before-send and max recording
   show a slider plus a 上限 field: type a ceiling and the slider rescales to it
   (0.5–5×, 0.5–60 s, 10 s–1 h); lowering the ceiling also pulls the current value

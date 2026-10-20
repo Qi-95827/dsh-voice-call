@@ -1,6 +1,6 @@
 {
   "name": "dsh-voice-call",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Talk to the current session: speech in, speech out, transcript in the conversation.",
   "icon": "icon.svg",
   "homepage": "https://github.com/Qi-95827/dsh-voice-call#readme",
@@ -22,6 +22,7 @@
   },
   "files": [
     "index.js",
+    "wav.js",
     "client.js",
     "cordis.patch.yml",
     "locale/*.json",
@@ -32,7 +33,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node scripts/smoke-client.mjs && node scripts/smoke-speech.mjs",
+    "test": "node scripts/smoke-client.mjs && node scripts/smoke-speech.mjs && node scripts/smoke-wav.mjs",
     "check": "node scripts/check-package.mjs"
   },
   "keywords": [

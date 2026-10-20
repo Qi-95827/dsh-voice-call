@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     const SILENCE_CAP = 10000;
     const MAX_RECORD_MS = 120000;
     const MAX_RECORD_MIN = 10000;
-    const MAX_RECORD_MAX = 3600000;
+    const MAX_RECORD_MAX = 900000;
     const MAX_RECORD_CAP = 600000;
     const RATE_MIN = 0.5;
     const RATE_MAX = 5;
@@ -101,7 +101,7 @@ window.__ModuleLoader__.load({
         'silence': '停顿多久算说完',
         'silence.hint': '说完后静音多久就把这句话发出去；说长句时调大',
         'maxRecord': '单次最长录音',
-        'maxRecord.hint': '一次最多录多久，到时间就自动结束并发送',
+        'maxRecord.hint': '一次最多录多久；超过 100 秒会自动分段识别（最长 15 分钟）',
         'cap': '上限',
         'cap.hint': '这一行的横条最多能拉到多少；改小会把当前值一起压下来',
         'input.clamp': '已按允许范围调整：{min}–{max}',
@@ -170,7 +170,7 @@ window.__ModuleLoader__.load({
         'silence': 'Pause before sending',
         'silence.hint': 'How long a silence ends a sentence; raise it for long dictation',
         'maxRecord': 'Max recording',
-        'maxRecord.hint': 'Hard limit for one utterance; it ends and sends when reached',
+        'maxRecord.hint': 'Hard limit for one utterance; audio over 100 s is recognized in segments (max 15 min)',
         'cap': 'Max',
         'cap.hint': "The slider's ceiling; lowering it pulls the current value down too",
         'input.clamp': 'Adjusted to the allowed range: {min}–{max}',

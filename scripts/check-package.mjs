@@ -44,7 +44,7 @@ if (patchFile) {
   if (!/insert:/.test(text)) problems.push(`${patchFile}: no insert entry`);
 }
 
-for (const entry of ['index.js', 'client.js', 'icon.svg', 'README.md', 'README.zh.md', 'LICENSE']) {
+for (const entry of ['index.js', 'wav.js', 'client.js', 'icon.svg', 'README.md', 'README.zh.md', 'LICENSE']) {
   if (!fs.existsSync(path.join(root, entry))) problems.push(`missing ${entry}`);
 }
 
