@@ -35,10 +35,15 @@ window.__ModuleLoader__.load({
 
     const FONT = "12px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif";
     const MIC_THRESHOLD = 0.009;
-    const SILENCE_MS = 2600; // default only; the setup panel can change it per browser
-    const SILENCE_MIN = 1200;
-    const SILENCE_MAX = 6000;
+    // Defaults only: the setup panel accepts any value inside these bounds.
+    const SILENCE_MS = 2600;
+    const SILENCE_MIN = 500;
+    const SILENCE_MAX = 30000;
     const MAX_RECORD_MS = 120000;
+    const MAX_RECORD_MIN = 10000;
+    const MAX_RECORD_MAX = 900000;
+    const RATE_MIN = 0.5;
+    const RATE_MAX = 3;
     const IDLE_MS = 10000;
     const FIRST_CHUNK = 90;
     const SPEECH_TAIL_MS = 600;
@@ -91,6 +96,9 @@ window.__ModuleLoader__.load({
         'bargeIn': '语音打断（我说话就停止朗读）',
         'silence': '停顿多久算说完',
         'silence.hint': '说完后静音多久就把这句话发出去；说长句时调大',
+        'maxRecord': '单次最长录音',
+        'maxRecord.hint': '一次最多录多久，到时间就自动结束并发送（10–900 秒）',
+        'input.clamp': '已按允许范围调整：{min}–{max}',
         'settings': '配置',
         'settings.hide': '收起配置',
         'error.ttsSkip': '有 {n} 段没读出来，已跳过',
@@ -155,6 +163,9 @@ window.__ModuleLoader__.load({
         'bargeIn': 'Stop reading when I speak',
         'silence': 'Pause before sending',
         'silence.hint': 'How long a silence ends a sentence; raise it for long dictation',
+        'maxRecord': 'Max recording',
+        'maxRecord.hint': 'Hard limit for one utterance; it ends and sends when reached (10–900 s)',
+        'input.clamp': 'Adjusted to the allowed range: {min}–{max}',
         'settings': 'Settings',
         'settings.hide': 'Hide settings',
         'error.ttsSkip': '{n} part(s) could not be spoken, skipped',
@@ -251,6 +262,24 @@ window.__ModuleLoader__.load({
       } catch {}
     }
 
+    let storedMaxRecord = MAX_RECORD_MS;
+    try {
+      const saved = Number(localStorage.getItem('dsh-voice-call-max-record'));
+      if (Number.isFinite(saved) && saved > 0) storedMaxRecord = saved;
+    } catch {}
+    storedMaxRecord = Math.min(MAX_RECORD_MAX, Math.max(MAX_RECORD_MIN, storedMaxRecord));
+
+    function setMaxRecord(value) {
+      const ms = Math.min(
+        MAX_RECORD_MAX,
+        Math.max(MAX_RECORD_MIN, Math.round(Number(value) || MAX_RECORD_MS)),
+      );
+      set({ maxRecord: ms });
+      try {
+        localStorage.setItem('dsh-voice-call-max-record', String(ms));
+      } catch {}
+    }
+
     function setBargeIn(value) {
       set({ bargeIn: Boolean(value) });
       try {
@@ -283,6 +312,7 @@ window.__ModuleLoader__.load({
       lang: storedLang,
       bargeIn: storedBargeIn,
       silence: storedSilence,
+      maxRecord: storedMaxRecord,
     };
 
     function set(patch) {
@@ -1007,16 +1037,17 @@ window.__ModuleLoader__.load({
     }
 
     function setRate(next) {
-      rate = next;
-      set({ rate: next });
+      const value = Math.min(RATE_MAX, Math.max(RATE_MIN, Number(next) || 1));
+      rate = value;
+      set({ rate: value });
       if (audioEl) {
         audioEl.preservesPitch = true;
-        audioEl.playbackRate = next;
+        audioEl.playbackRate = value;
       }
       fetch('/voice-call/config', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ rate: next }),
+        body: JSON.stringify({ rate: value }),
       }).catch(() => {});
     }
 
@@ -1176,7 +1207,7 @@ window.__ModuleLoader__.load({
         }
         if (!spoken && now - started > idleMs) finish();
         else if (spoken && now - lastVoice > silenceMs) finish();
-        else if (now - started > MAX_RECORD_MS) finish();
+        else if (now - started > (call.maxRecord || MAX_RECORD_MS)) finish();
       }, 100);
       await stopped;
       clearInterval(timer);
@@ -1627,21 +1658,61 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /**
+     * A typed number instead of a slider: the ceiling is only a sanity bound,
+     * and the value is committed on blur or Enter so typing is not clamped
+     * character by character.
+     */
+    function NumberField(props) {
+      const [text, setText] = useState(String(props.value));
+      const [editing, setEditing] = useState(false);
+      useEffect(() => {
+        if (!editing) setText(String(props.value));
+      }, [props.value, editing]);
+      const commit = (raw) => {
+        const source = raw === undefined ? text : String(raw);
+        const next = Number(source);
+        if (!source.trim() || !Number.isFinite(next) || next <= 0) {
+          setText(String(props.value));
+          return;
+        }
+        props.onCommit(next);
+      };
+      return h('input', {
+        type: 'number',
+        inputMode: 'decimal',
+        min: props.min,
+        max: props.max,
+        step: props.step,
+        value: text,
+        title: props.title,
+        onChange: (event) => setText(event.target.value),
+        onFocus: () => setEditing(true),
+        onBlur: (event) => {
+          setEditing(false);
+          commit(event?.target?.value);
+        },
+        onKeyDown: (event) => {
+          if (event.key === 'Enter' && event.currentTarget?.blur) event.currentTarget.blur();
+        },
+        style: { ...S.input, width: 62, flex: '0 0 auto', textAlign: 'right', padding: '4px 6px' },
+      });
+    }
+
     function rateRow(state, accent) {
       return h(
         'label',
         { style: S.label },
         t('rate'),
-        h('input', {
-          type: 'range',
-          min: 0.7,
-          max: 1.5,
+        h('span', { style: { flex: 1 } }),
+        h(NumberField, {
+          value: Math.round(Number(state.rate) * 100) / 100,
+          min: RATE_MIN,
+          max: RATE_MAX,
           step: 0.05,
-          value: state.rate,
-          onChange: (event) => setRate(Number(event.target.value)),
-          style: { flex: 1, accentColor: accent },
+          onCommit: (value) => setRate(value),
         }),
-        h('span', { style: { width: 36, textAlign: 'right' } }, Number(state.rate).toFixed(2) + '×'),
+        h('span', null, '×'),
       );
     }
 
@@ -1651,16 +1722,35 @@ window.__ModuleLoader__.load({
         'label',
         { style: S.label, title: t('silence.hint') },
         t('silence'),
-        h('input', {
-          type: 'range',
+        h('span', { style: { flex: 1 } }),
+        h(NumberField, {
+          value: seconds,
           min: SILENCE_MIN / 1000,
           max: SILENCE_MAX / 1000,
-          step: 0.2,
-          value: seconds,
-          onChange: (event) => setSilence(Number(event.target.value) * 1000),
-          style: { flex: 1, accentColor: accent },
+          step: 0.1,
+          title: t('silence.hint'),
+          onCommit: (value) => setSilence(value * 1000),
         }),
-        h('span', { style: { width: 36, textAlign: 'right' } }, seconds.toFixed(1) + 's'),
+        h('span', null, 's'),
+      );
+    }
+
+    function maxRecordRow(state, accent) {
+      const seconds = Math.round((Number(state.maxRecord) || MAX_RECORD_MS) / 1000);
+      return h(
+        'label',
+        { style: S.label, title: t('maxRecord.hint') },
+        t('maxRecord'),
+        h('span', { style: { flex: 1 } }),
+        h(NumberField, {
+          value: seconds,
+          min: MAX_RECORD_MIN / 1000,
+          max: MAX_RECORD_MAX / 1000,
+          step: 5,
+          title: t('maxRecord.hint'),
+          onCommit: (value) => setMaxRecord(value * 1000),
+        }),
+        h('span', null, 's'),
       );
     }
 
@@ -1738,6 +1828,7 @@ window.__ModuleLoader__.load({
         voiceRow(state),
         rateRow(state, accent),
         silenceRow(state, accent),
+        maxRecordRow(state, accent),
         cleanRow(state, accent),
         bargeRow(state, accent),
         withColor ? h(AccentPicker, { accent, onChange: setAccent }) : null,

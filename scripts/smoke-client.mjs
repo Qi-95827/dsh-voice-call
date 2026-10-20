@@ -163,14 +163,25 @@ const prepOpen = render(component());
 if (!JSON.stringify(prepOpen).includes('按钮颜色')) throw new Error('settings did not open');
 if (!JSON.stringify(prepOpen).includes('收起配置')) throw new Error('settings button did not switch label');
 
-// Pause-before-send is adjustable and survives a re-render.
-const silenceSlider = findToggle(prepOpen, '停顿多久算说完');
-if (!silenceSlider) throw new Error('silence slider missing');
-if (silenceSlider.props.min !== 1.2 || silenceSlider.props.max !== 6) {
-  throw new Error(`unexpected silence range: ${silenceSlider.props.min}-${silenceSlider.props.max}`);
+// The three numeric settings are typed fields with generous bounds, and a
+// committed value reaches the state.
+function commitNumber(label, value) {
+  const field = findToggle(render(component()), label);
+  if (!field) throw new Error(`${label} field missing`);
+  if (field.props.type !== 'number') throw new Error(`${label} should be a number input`);
+  field.props.onChange({ target: { value: String(value) } });
+  field.props.onBlur({ target: { value: String(value) } });
+  return findToggle(render(component()), label);
 }
-silenceSlider.props.onChange({ target: { value: '4' } });
-if (!JSON.stringify(render(component())).includes('4.0s')) throw new Error('silence value was not applied');
+
+const silenceField = findToggle(prepOpen, '停顿多久算说完');
+if (!silenceField) throw new Error('silence field missing');
+if (silenceField.props.min !== 0.5 || silenceField.props.max !== 30) {
+  throw new Error(`unexpected silence range: ${silenceField.props.min}-${silenceField.props.max}`);
+}
+if (commitNumber('停顿多久算说完', 5).props.value !== '5') throw new Error('silence value was not applied');
+if (commitNumber('语速', 1.4).props.value !== '1.4') throw new Error('rate value was not applied');
+if (commitNumber('单次最长录音', 300).props.value !== '300') throw new Error('max recording value was not applied');
 
 // Voice barge-in exists, defaults to off, and can be turned on.
 const bargeToggle = findToggle(prepOpen, '语音打断');

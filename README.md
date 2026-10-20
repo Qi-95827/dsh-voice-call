@@ -135,17 +135,19 @@ Open the call widget and paste an Alibaba Cloud DashScope API key (`sk-…`).
 
 Non-secret preferences (voice, rate, monthly character count) live in
 `~/.dsh/voice-call.json`. The interface language, the "朗读清洗" switch, voice
-barge-in, the pause-before-send length and the button colour are per browser and
-stored in `localStorage`; the colour defaults to DeepSeek blue (`#4D6BFE`), is
-picked from swatches or any custom value, and is offered only in the pre-call
-panel — the in-call card does not show it, so it cannot be changed by accident
-mid-call.
+barge-in, the pause-before-send length, the max recording length and the button
+colour are per browser and stored in `localStorage`; the colour defaults to
+DeepSeek blue (`#4D6BFE`), is picked from swatches or any custom value, and is
+offered only in the pre-call panel — the in-call card does not show it, so it
+cannot be changed by accident mid-call.
 
 ## Behaviour notes
 
-- **A sentence ends after a silence you control.** The 停顿多久算说完 slider sets
-  how long a pause ends the utterance — 1.2 s to 6.0 s, default 2.6 s. Raise it
-  when you think mid-sentence; **说完** still sends immediately.
+- **A sentence ends after a silence you control.** The 停顿多久算说完 field sets
+  how long a pause ends the utterance; **说完** still sends immediately.
+- **Three numbers are typed, not fixed.** Rate (0.5–3.0×), pause before sending
+  (0.5–30 s) and max recording (10–900 s) are number fields, with those values as
+  sanity bounds only; commit with Enter or by leaving the field.
 - **“打断” stops the reading only.** It aborts the current speech fetches, clears
   the queue, and keeps the agent generating. Speaking again while the turn is
   still running sends that message with `steer`.
