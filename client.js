@@ -35,8 +35,10 @@ window.__ModuleLoader__.load({
 
     const FONT = "12px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif";
     const MIC_THRESHOLD = 0.009;
-    const SILENCE_MS = 2600;
-    const MAX_RECORD_MS = 45000;
+    const SILENCE_MS = 2600; // default only; the setup panel can change it per browser
+    const SILENCE_MIN = 1200;
+    const SILENCE_MAX = 6000;
+    const MAX_RECORD_MS = 120000;
     const IDLE_MS = 10000;
     const FIRST_CHUNK = 90;
     const SPEECH_TAIL_MS = 600;
@@ -87,6 +89,8 @@ window.__ModuleLoader__.load({
         'rate': '语速',
         'clean': '朗读清洗（跳过表格/代码）',
         'bargeIn': '语音打断（我说话就停止朗读）',
+        'silence': '停顿多久算说完',
+        'silence.hint': '说完后静音多久就把这句话发出去；说长句时调大',
         'settings': '配置',
         'settings.hide': '收起配置',
         'error.ttsSkip': '有 {n} 段没读出来，已跳过',
@@ -149,6 +153,8 @@ window.__ModuleLoader__.load({
         'rate': 'Rate',
         'clean': 'Skip code and tables when reading',
         'bargeIn': 'Stop reading when I speak',
+        'silence': 'Pause before sending',
+        'silence.hint': 'How long a silence ends a sentence; raise it for long dictation',
         'settings': 'Settings',
         'settings.hide': 'Hide settings',
         'error.ttsSkip': '{n} part(s) could not be spoken, skipped',
@@ -230,6 +236,21 @@ window.__ModuleLoader__.load({
       storedBargeIn = localStorage.getItem('dsh-voice-call-barge-in') === '1';
     } catch {}
 
+    let storedSilence = SILENCE_MS;
+    try {
+      const saved = Number(localStorage.getItem('dsh-voice-call-silence'));
+      if (Number.isFinite(saved) && saved > 0) storedSilence = saved;
+    } catch {}
+    storedSilence = Math.min(SILENCE_MAX, Math.max(SILENCE_MIN, storedSilence));
+
+    function setSilence(value) {
+      const ms = Math.min(SILENCE_MAX, Math.max(SILENCE_MIN, Math.round(Number(value) || SILENCE_MS)));
+      set({ silence: ms });
+      try {
+        localStorage.setItem('dsh-voice-call-silence', String(ms));
+      } catch {}
+    }
+
     function setBargeIn(value) {
       set({ bargeIn: Boolean(value) });
       try {
@@ -261,6 +282,7 @@ window.__ModuleLoader__.load({
       accent: storedAccent,
       lang: storedLang,
       bargeIn: storedBargeIn,
+      silence: storedSilence,
     };
 
     function set(patch) {
@@ -1110,7 +1132,7 @@ window.__ModuleLoader__.load({
       return Math.sqrt(sum / data.length);
     }
 
-    async function recordUtterance(idleMs = IDLE_MS, silenceMs = SILENCE_MS) {
+    async function recordUtterance(idleMs = IDLE_MS, silenceMs = call.silence || SILENCE_MS) {
       const { stream, context, analyser } = await ensureMic();
       const recorder = new MediaRecorder(stream);
       const chunks = [];
@@ -1623,6 +1645,25 @@ window.__ModuleLoader__.load({
       );
     }
 
+    function silenceRow(state, accent) {
+      const seconds = Math.round((Number(state.silence) || SILENCE_MS) / 100) / 10;
+      return h(
+        'label',
+        { style: S.label, title: t('silence.hint') },
+        t('silence'),
+        h('input', {
+          type: 'range',
+          min: SILENCE_MIN / 1000,
+          max: SILENCE_MAX / 1000,
+          step: 0.2,
+          value: seconds,
+          onChange: (event) => setSilence(Number(event.target.value) * 1000),
+          style: { flex: 1, accentColor: accent },
+        }),
+        h('span', { style: { width: 36, textAlign: 'right' } }, seconds.toFixed(1) + 's'),
+      );
+    }
+
     function cleanRow(state, accent) {
       return h(
         'label',
@@ -1696,6 +1737,7 @@ window.__ModuleLoader__.load({
         { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
         voiceRow(state),
         rateRow(state, accent),
+        silenceRow(state, accent),
         cleanRow(state, accent),
         bargeRow(state, accent),
         withColor ? h(AccentPicker, { accent, onChange: setAccent }) : null,

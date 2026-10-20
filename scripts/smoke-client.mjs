@@ -163,6 +163,15 @@ const prepOpen = render(component());
 if (!JSON.stringify(prepOpen).includes('按钮颜色')) throw new Error('settings did not open');
 if (!JSON.stringify(prepOpen).includes('收起配置')) throw new Error('settings button did not switch label');
 
+// Pause-before-send is adjustable and survives a re-render.
+const silenceSlider = findToggle(prepOpen, '停顿多久算说完');
+if (!silenceSlider) throw new Error('silence slider missing');
+if (silenceSlider.props.min !== 1.2 || silenceSlider.props.max !== 6) {
+  throw new Error(`unexpected silence range: ${silenceSlider.props.min}-${silenceSlider.props.max}`);
+}
+silenceSlider.props.onChange({ target: { value: '4' } });
+if (!JSON.stringify(render(component())).includes('4.0s')) throw new Error('silence value was not applied');
+
 // Voice barge-in exists, defaults to off, and can be turned on.
 const bargeToggle = findToggle(prepOpen, '语音打断');
 if (!bargeToggle) throw new Error('barge-in toggle missing');
