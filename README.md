@@ -170,8 +170,9 @@ cannot be changed by accident mid-call.
 - **Reasoning is never read.** `reasoning-delta` chunks and `reasoning` /
   `thinking` blocks are filtered out before speech.
 - **One slow sentence cannot silence the reply.** Each synthesis attempt gives up
-  after 12 s and is retried once; if a sentence still cannot be synthesized it is
-  skipped with a short notice in the card, while the rest keeps playing.
+  after 20 s — above the Host's own 15 s upstream deadline, so a slow call is not
+  aborted twice — and is retried once; if a sentence still cannot be synthesized
+  it is skipped with a notice that names the reason, while the rest keeps playing.
 - **The card shows the reply while it streams.** The transcript is updated as the
   answer is generated and read, instead of appearing only at `turn/end`, and it
   scrolls to the newest sentence.

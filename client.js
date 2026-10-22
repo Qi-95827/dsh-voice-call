@@ -51,9 +51,10 @@ window.__ModuleLoader__.load({
     const IDLE_MS = 10000;
     const FIRST_CHUNK = 90;
     const SPEECH_TAIL_MS = 600;
-    // A single synthesis attempt gives up after this; the next chunk still
-    // plays, so one slow upstream call cannot silence the whole reply.
-    const TTS_TIMEOUT_MS = 12000;
+    // A single synthesis attempt gives up after this. It must stay above the
+    // host's own 15 s upstream deadline: aborting earlier turns a slow-but-fine
+    // call into a duplicate request and a skipped sentence.
+    const TTS_TIMEOUT_MS = 20000;
     // Voice barge-in: ignore the first moments of playback, then require a
     // sustained voice before stopping the reading.
     const BARGE_GRACE_MS = 400;
@@ -107,7 +108,7 @@ window.__ModuleLoader__.load({
         'input.clamp': '已按允许范围调整：{min}–{max}',
         'settings': '配置',
         'settings.hide': '收起配置',
-        'error.ttsSkip': '有 {n} 段没读出来，已跳过',
+        'error.ttsSkip': '有 {n} 段没读出来（{message}），已跳过',
         'color': '按钮颜色',
         'color.custom': '自定义颜色',
         'key.configured': '已配置 {mask}',
@@ -176,7 +177,7 @@ window.__ModuleLoader__.load({
         'input.clamp': 'Adjusted to the allowed range: {min}–{max}',
         'settings': 'Settings',
         'settings.hide': 'Hide settings',
-        'error.ttsSkip': '{n} part(s) could not be spoken, skipped',
+        'error.ttsSkip': '{n} part(s) skipped ({message})',
         'color': 'Button colour',
         'color.custom': 'Custom colour',
         'key.configured': 'Key set: {mask}',

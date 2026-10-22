@@ -400,8 +400,25 @@ export function apply(ctx) {
               const settings = await loadSettings();
               const text = url.searchParams.get('text') || '';
               const voice = url.searchParams.get('voice') || settings.voice || 'Cherry';
-              const audio = await synthesize(text, voice, await resolveKey());
-              trace(diagnostics.tts, { chars: String(text).length, voice, head: String(text).slice(0, 12) });
+              let audio;
+              try {
+                audio = await synthesize(text, voice, await resolveKey());
+              } catch (error) {
+                trace(diagnostics.tts, {
+                  ok: false,
+                  chars: String(text).length,
+                  voice,
+                  head: String(text).slice(0, 12),
+                  error: String(error?.message || error).slice(0, 120),
+                });
+                throw error;
+              }
+              trace(diagnostics.tts, {
+                ok: true,
+                chars: String(text).length,
+                voice,
+                head: String(text).slice(0, 12),
+              });
               settings.usage.month = monthKey();
               settings.usage.chars = Number(settings.usage.chars || 0) + String(text).length;
               await saveSettings();
